@@ -1,22 +1,36 @@
-#include <structures.h>
+#ifndef VARIABLES_H
+#define VARIABLES_H
+
+#include "constants.h"
+
+// GLOBAL VARIABLES USED BY BOTH CPUS
+// ==================================
 
 // Define the arrays for each individual gap pattern. The number of arrays must equal the
 // numPatterns constant declared in constants.h
-float gapPattern0[numGaps];
-float gapPattern1[numGaps];
-float gapPattern2[numGaps];
-float gapPattern3[numGaps];
-float gapPattern4[numGaps];
-float gapPattern5[numGaps];
+extern float gapPattern0[numGaps];
+extern float gapPattern1[numGaps];
+extern float gapPattern2[numGaps];
+extern float gapPattern3[numGaps];
+extern float gapPattern4[numGaps];
+extern float gapPattern5[numGaps];
 
 // Pointer list for easy iteration
-float* arrays[numPatterns] = { gapPattern0, gapPattern1, gapPattern2, gapPattern3, gapPattern4, gapPattern5 };
+extern float* arrays[numPatterns];
 
-// Combined 1-dimensional array used for I2C communications between the Teensys since multi-dimensional
-// arrays don't seem to work as variable structures for the I2C comms library
-float transmitData[numPatterns*numGaps];
-float receiveData[numPatterns*numGaps];
+// 2-dimensional arrays used for transmitting and receving I2C data between the Teensys
+extern float transmitData[numPatterns][numGaps];
+extern float receiveData[numPatterns][numGaps];
 
-// i2cData transmitData;
-// i2cData receiveData;
+// CPU SPECIFIC GLOBAL VARIABLES
+// =============================
 
+#ifdef CPU1
+extern int cpu1Counter;
+#endif
+
+#ifdef CPU2
+extern int cpu2Counter;
+#endif
+
+#endif

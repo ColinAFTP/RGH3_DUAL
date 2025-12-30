@@ -1,4 +1,8 @@
-#include <functions.h>
+#include <Arduino.h>
+#include <i2c_driver.h>
+#include <i2c_driver_wire.h>
+
+#include "functions_i2c.h"
 
 int led = LED_BUILTIN;
 

@@ -1,33 +1,29 @@
-//#include <Arduino.h>
 #include <i2c_driver.h>
 #include <i2c_driver_wire.h>
-#include <variables.h>
+
+#include "functions_i2c.h"
+#include "variables.h"
 
 // Copy values from each gap pattern to a single array to be used for I2C communications
 void copyToTransmitData() {
-    int index = 0;
-
-    for (int r = 0; r < numPatterns; r++) {
-        for (int c = 0; c < numGaps; c++) {
-            transmitData[index++] = arrays[r][c];
-        }
-    }
+  for (int r = 0; r < numPatterns; r++) {
+      for (int c = 0; c < numGaps; c++) {
+          transmitData[r][c] = arrays[r][c];
+      }
+  }
 }
 
 // Copy values from a single array used for I2C communications to each gap pattern
 void copyFromReceiveData() {
-    int index = 0;
-
-    for (int r = 0; r < numPatterns; r++) {
-        for (int c = 0; c < numGaps; c++) {
-            arrays[r][c] = receiveData[index++];
-        }
-    }
+  for (int r = 0; r < numPatterns; r++) {
+      for (int c = 0; c < numGaps; c++) {
+          arrays[r][c] = receiveData[r][c];
+      }
+  }
 }
 
-// function that executes whenever data is requested by master
-// this function is registered as an event, see setup()
-// Event
+// Function that executes whenever data is requested by master (CPU2).
+// This function is registered as an event, see setup() on CPU1.
 void writeGapPatterns() {
   Serial.print("Sending ("); 
   Serial.print(sizeof transmitData);
@@ -49,7 +45,7 @@ void writeGapPatterns() {
       Serial.print(": ");
 
       for (int c = 0; c < numGaps; c++) {
-          Serial.print(transmitData[r*numGaps+c]);
+          Serial.print(transmitData[r][c]);
           Serial.print(" ");
       }
       Serial.println();
@@ -58,8 +54,8 @@ void writeGapPatterns() {
   Wire2.write((byte*) &transmitData, sizeof transmitData);
 }
 
-
-
+// Function that requests data from the slave (CPU1). 
+// This function is called from CPU2.
 void readGapPatterns() {
   Serial.print("Requesting ("); 
   Serial.print(sizeof receiveData); 
