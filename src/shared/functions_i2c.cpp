@@ -6,8 +6,8 @@
 
 // Copy values from each gap pattern to a single array to be used for I2C communications
 void copyToTransmitData() {
-  for (int r = 0; r < numPatterns; r++) {
-      for (int c = 0; c < numGaps; c++) {
+  for (int r = 0; r < NUM_PATTERNS; r++) {
+      for (int c = 0; c < NUM_GAPS; c++) {
           transmitData[r][c] = arrays[r][c];
       }
   }
@@ -15,8 +15,8 @@ void copyToTransmitData() {
 
 // Copy values from a single array used for I2C communications to each gap pattern
 void copyFromReceiveData() {
-  for (int r = 0; r < numPatterns; r++) {
-      for (int c = 0; c < numGaps; c++) {
+  for (int r = 0; r < NUM_PATTERNS; r++) {
+      for (int c = 0; c < NUM_GAPS; c++) {
           arrays[r][c] = receiveData[r][c];
       }
   }
@@ -30,26 +30,26 @@ void writeGapPatterns() {
   Serial.println(" bytes)");
 
   // Example: fill arrays with test values
-  for (int r = 0; r < numPatterns; r++) {
-      for (int c = 0; c < numGaps; c++) {
+  for (int r = 0; r < NUM_PATTERNS; r++) {
+      for (int c = 0; c < NUM_GAPS; c++) {
           arrays[r][c] = (r * 10) + c;  // unique values
       }
   }
 
   copyToTransmitData();
 
-  // Print transmitData to verify
-  for (int r = 0; r < numPatterns; r++) {
-      Serial.print("Array ");
-      Serial.print(r);
-      Serial.print(": ");
+  // // Print transmitData to verify
+  // for (int r = 0; r < NUM_PATTERNS; r++) {
+  //     Serial.print("Array ");
+  //     Serial.print(r);
+  //     Serial.print(": ");
 
-      for (int c = 0; c < numGaps; c++) {
-          Serial.print(transmitData[r][c]);
-          Serial.print(" ");
-      }
-      Serial.println();
-  }
+  //     for (int c = 0; c < NUM_GAPS; c++) {
+  //         Serial.print(transmitData[r][c]);
+  //         Serial.print(" ");
+  //     }
+  //     Serial.println();
+  // }
 
   Wire2.write((byte*) &transmitData, sizeof transmitData);
 }
@@ -67,12 +67,12 @@ void readGapPatterns() {
     copyFromReceiveData();
 
     // Print arrays to verify
-    for (int r = 0; r < numPatterns; r++) {
+    for (int r = 0; r < NUM_PATTERNS; r++) {
         Serial.print("Array ");
         Serial.print(r);
         Serial.print(": ");
 
-        for (int c = 0; c < numGaps; c++) {
+        for (int c = 0; c < NUM_GAPS; c++) {
             Serial.print(arrays[r][c]);
             Serial.print(" ");
         }

@@ -1,36 +1,35 @@
 #ifndef VARIABLES_H
 #define VARIABLES_H
 
+#include <NativeEthernet.h>
+#include <ArduinoRS485.h> // ArduinoModbus depends on the ArduinoRS485 library
+#include <ArduinoModbus.h>
+
 #include "constants.h"
 
-// GLOBAL VARIABLES USED BY BOTH CPUS
-// ==================================
-
 // Define the arrays for each individual gap pattern. The number of arrays must equal the
-// numPatterns constant declared in constants.h
-extern float gapPattern0[numGaps];
-extern float gapPattern1[numGaps];
-extern float gapPattern2[numGaps];
-extern float gapPattern3[numGaps];
-extern float gapPattern4[numGaps];
-extern float gapPattern5[numGaps];
+// NUM_PATTERNS constant declared in constants.h
+extern float gapPattern0[NUM_GAPS];
+extern float gapPattern1[NUM_GAPS];
+extern float gapPattern2[NUM_GAPS];
+extern float gapPattern3[NUM_GAPS];
+extern float gapPattern4[NUM_GAPS];
+extern float gapPattern5[NUM_GAPS];
 
 // Pointer list for easy iteration
-extern float* arrays[numPatterns];
+extern float* arrays[NUM_PATTERNS];
 
 // 2-dimensional arrays used for transmitting and receving I2C data between the Teensys
-extern float transmitData[numPatterns][numGaps];
-extern float receiveData[numPatterns][numGaps];
+extern float transmitData[NUM_PATTERNS][NUM_GAPS];
+extern float receiveData[NUM_PATTERNS][NUM_GAPS];
 
-// CPU SPECIFIC GLOBAL VARIABLES
-// =============================
+// Variables used for the input signals
+extern uint16_t inputData;
 
-#ifdef CPU1
-extern int cpu1Counter;
-#endif
-
-#ifdef CPU2
-extern int cpu2Counter;
-#endif
+// Variables used for communications
+extern bool newClient;
+extern EthernetServer ethernetServer;
+extern EthernetClient ethernetClient;
+extern ModbusTCPServer modbusServer;
 
 #endif
