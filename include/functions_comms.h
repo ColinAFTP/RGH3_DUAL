@@ -3,5 +3,6 @@
 
 void modbusSetup();
 void ethernetConnect();
+void patternCheck();
 
 #endif

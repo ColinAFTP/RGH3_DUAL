@@ -98,15 +98,32 @@ void modbusSetup() {
 }
 
 void ethernetConnect() {
+  static uint32_t lastNoClientMsg = 0;            // timestamp of last "no client" message
+  const uint32_t interval = 5000;                 // 5 seconds
 
-    ethernetClient = ethernetServer.available();   // <— store globally
-
-    if (ethernetClient.connected()) {
-      Serial.println("Ethernet client connected");
-      modbusServer.accept(ethernetClient);
-
-    }
-
-
+  ethernetClient = ethernetServer.available();    // <— store globally
+  if (ethernetClient.connected()) {
+    Serial.println("Ethernet client connected");
+    modbusServer.accept(ethernetClient);
+  } else {
+    // No client connected — print message only every 5 seconds
+    uint32_t now = millis();
+    if (now - lastNoClientMsg >= interval) {
+        Serial.println("No client connected yet");
+        lastNoClientMsg = now;
+    }    
+  }
 }
 
+void patternCheck() {
+  // Check which pattern selection must go to the stepper motors
+  patternSelection = modbusServer.holdingRegisterRead(ADDR_PATTERN);
+  if (patternSelection < 0 or patternSelection >= NUM_PATTERNS) {
+    patternSelection = 0;
+    Serial.println();
+    Serial.println("Error: Pattern selection is out of bounds!");
+    modbusServer.holdingRegisterWrite(ADDR_PATTERN, patternSelectionPrevious);
+  }
+  Serial.print("   | Current pattern: ");
+  Serial.println(patternSelection);
+}

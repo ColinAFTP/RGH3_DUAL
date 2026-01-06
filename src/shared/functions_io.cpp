@@ -1,21 +1,24 @@
-#include <FastShiftIn.h>
-
 #include "constants.h"
 #include "functions_io.h"
 #include "variables.h"
 
-// Shift register objects
-FastShiftIn FSI(INPUTS_DATA_PIN, INPUTS_DATA_CLOCK_PIN, MSBFIRST);
+// Initialise the shift registers after the pin modes have been set
+void initShiftRegisters() {
+    pinMode(INPUTS_DATA_PIN, INPUT);
+    pinMode(INPUTS_DATA_CLOCK_PIN, OUTPUT);
+    // Now that pins are configured, construct the object
+    FSI = new FastShiftIn(INPUTS_DATA_PIN, INPUTS_DATA_CLOCK_PIN, MSBFIRST);
+}
 
 // Update the inputs
 void inputsUpdate() {
   // Pulse the load pin to load the current inputs into the shift registers
-  digitalWrite(INPUTS_DATA_LOAD_PIN, 0);
+  digitalWrite(INPUTS_DATA_LOAD_PIN, LOW);
   delay(1);
-  digitalWrite(INPUTS_DATA_LOAD_PIN, 1);
+  digitalWrite(INPUTS_DATA_LOAD_PIN, HIGH);
   delay(1);
   // Load the bits from the shift registers using the FastShiftIn library
-  inputData = FSI.read16();
+  inputData = FSI->read16();
   // Invert the inputs because there are pull-up resistors
   inputData = ~inputData;
 }

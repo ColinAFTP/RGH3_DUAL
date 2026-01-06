@@ -4,6 +4,7 @@
 #include <NativeEthernet.h>
 #include <ArduinoRS485.h> // ArduinoModbus depends on the ArduinoRS485 library
 #include <ArduinoModbus.h>
+#include <FastShiftIn.h>
 
 #include "constants.h"
 
@@ -24,12 +25,14 @@ extern float transmitData[NUM_PATTERNS][NUM_GAPS];
 extern float receiveData[NUM_PATTERNS][NUM_GAPS];
 
 // Variables used for the input signals
+extern FastShiftIn* FSI;      // This is a pointer, not an object
 extern uint16_t inputData;
 
 // Variables used for communications
-extern bool newClient;
 extern EthernetServer ethernetServer;
 extern EthernetClient ethernetClient;
 extern ModbusTCPServer modbusServer;
+extern int patternSelection;
+extern int patternSelectionPrevious;
 
 #endif

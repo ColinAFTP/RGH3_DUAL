@@ -14,10 +14,12 @@ float receiveData[NUM_PATTERNS][NUM_GAPS] = {0};
 float* arrays[NUM_PATTERNS] = { gapPattern0, gapPattern1, gapPattern2, gapPattern3, gapPattern4, gapPattern5 };
 
 // Variables used for the input signals
+FastShiftIn* FSI = nullptr;
 uint16_t inputData = 0;
 
 // Variables used for comms
-bool newClient = false;
 EthernetServer ethernetServer(502);
 EthernetClient ethernetClient;
 ModbusTCPServer modbusServer;
+int patternSelection = 0;
+int patternSelectionPrevious = 0;

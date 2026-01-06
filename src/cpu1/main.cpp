@@ -32,6 +32,9 @@ void setup()
   Serial.println("===============================");
   Serial.println();
 
+  // Initialise shift registers
+  initShiftRegisters();
+
   digitalWrite(led, HIGH); 
 
   // Set up the Modbus server and address locations
@@ -61,13 +64,16 @@ void loop()
         inputsUpdate();
         Serial.print("   | Input data: ");
         Serial.println(inputData);
-        relayControl(5);
+        relayControl(inputData);
+        //Check for new pattern requests
+        patternCheck();
       }
     }
   
 }
 
 
+	
 
    
   

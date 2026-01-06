@@ -1,7 +1,16 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-// Shared constants (declared here, defined in constants.cpp)
+// Modbus holding address constants
+constexpr int ADDR_TICKER = 101;
+constexpr int ADDR_HOME_COUNTS = 102;
+constexpr int ADDR_INPUTS = 103;
+constexpr int ADDR_PATTERN = 104;
+constexpr int ADDR_SPEED = 105;
+constexpr int ADDR_RELAYS = 106;              // Each of the first 16 bits corresponds to the switching of the 16 relays
+constexpr int ADDR_MANUAL_PTR = 107;          // Pointer to which spreader will be moved in manual mode (1-9)
+
+// Pattern constants
 constexpr int NUM_PATTERNS = 6;
 constexpr int NUM_GAPS = 9;
 
@@ -23,30 +32,30 @@ constexpr int DIP_SW3 = 41;
 
 // CPU2 pin numbers
 // Stepper driver pins
-const int STEPPER1_PULSE_PIN = 13;
-const int STEPPER1_DIR_PIN = 33;
-const int STEPPER2_PULSE_PIN = 12;
-const int STEPPER2_DIR_PIN = 34;
-const int STEPPER3_PULSE_PIN = 11;
-const int STEPPER3_DIR_PIN = 35;
-const int STEPPER4_PULSE_PIN = 10;
-const int STEPPER4_DIR_PIN = 36;
-const int STEPPER5_PULSE_PIN = 9;
-const int STEPPER5_DIR_PIN = 37;
-const int STEPPER6_PULSE_PIN = 8;
-const int STEPPER6_DIR_PIN = 38;
-const int STEPPER7_PULSE_PIN = 7;
-const int STEPPER7_DIR_PIN = 32;
-const int STEPPER8_PULSE_PIN = 6;
-const int STEPPER8_DIR_PIN = 31;
-const int STEPPER9_PULSE_PIN = 5;
-const int STEPPER9_DIR_PIN = 30;
-const int STEPPER10_PULSE_PIN = 4;
-const int STEPPER10_DIR_PIN = 29;
-const int STEPPER11_PULSE_PIN = 3;
-const int STEPPER11_DIR_PIN = 28;
-const int STEPPER12_PULSE_PIN = 2;
-const int STEPPER12_DIR_PIN = 27;
+constexpr int STEPPER1_PULSE_PIN = 13;
+constexpr int STEPPER1_DIR_PIN = 33;
+constexpr int STEPPER2_PULSE_PIN = 12;
+constexpr int STEPPER2_DIR_PIN = 34;
+constexpr int STEPPER3_PULSE_PIN = 11;
+constexpr int STEPPER3_DIR_PIN = 35;
+constexpr int STEPPER4_PULSE_PIN = 10;
+constexpr int STEPPER4_DIR_PIN = 36;
+constexpr int STEPPER5_PULSE_PIN = 9;
+constexpr int STEPPER5_DIR_PIN = 37;
+constexpr int STEPPER6_PULSE_PIN = 8;
+constexpr int STEPPER6_DIR_PIN = 38;
+constexpr int STEPPER7_PULSE_PIN = 7;
+constexpr int STEPPER7_DIR_PIN = 32;
+constexpr int STEPPER8_PULSE_PIN = 6;
+constexpr int STEPPER8_DIR_PIN = 31;
+constexpr int STEPPER9_PULSE_PIN = 5;
+constexpr int STEPPER9_DIR_PIN = 30;
+constexpr int STEPPER10_PULSE_PIN = 4;
+constexpr int STEPPER10_DIR_PIN = 29;
+constexpr int STEPPER11_PULSE_PIN = 3;
+constexpr int STEPPER11_DIR_PIN = 28;
+constexpr int STEPPER12_PULSE_PIN = 2;
+constexpr int STEPPER12_DIR_PIN = 27;
 
 
 #endif
