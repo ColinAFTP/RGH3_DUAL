@@ -15,6 +15,7 @@ constexpr int NUM_PATTERNS = 6;
 constexpr int NUM_GAPS = 9;
 
 // CPU1 pin numbers
+// ================
 // Relay shift register pins
 constexpr int RELAY_DATA_CLOCK_PIN = 2;       //SHCP
 constexpr int RELAY_DATA_PIN = 3;             //DATA
@@ -25,12 +26,23 @@ constexpr int INPUTS_DATA_PIN = 5;            //Q7
 constexpr int INPUTS_DATA_LOAD_PIN = 6;       //PL
 constexpr int INPUTS_DATA_CLOCK_PIN = 7;      //CP
 
+// Hardwired IO signal pins
+constexpr int OUTPUT_A1 = 33;
+constexpr int OUTPUT_A2 = 32;
+constexpr int OUTPUT_A3 = 31;
+constexpr int OUTPUT_A4 = 30;
+constexpr int INPUT_B1 = 29;
+constexpr int INPUT_B2 = 28;
+constexpr int INPUT_B3 = 27;
+constexpr int INPUT_B4 = 26;
+
 // IP address DIP switch pins
 constexpr int DIP_SW1 = 39;
 constexpr int DIP_SW2 = 40;
 constexpr int DIP_SW3 = 41;
 
 // CPU2 pin numbers
+// ================
 // Stepper driver pins
 constexpr int STEPPER1_PULSE_PIN = 13;
 constexpr int STEPPER1_DIR_PIN = 33;
@@ -56,6 +68,16 @@ constexpr int STEPPER11_PULSE_PIN = 3;
 constexpr int STEPPER11_DIR_PIN = 28;
 constexpr int STEPPER12_PULSE_PIN = 2;
 constexpr int STEPPER12_DIR_PIN = 27;
+
+// Hardwired IO signal pins
+constexpr int INPUT_A1 = 23;
+constexpr int INPUT_A2 = 17;
+constexpr int INPUT_A3 = 18;
+constexpr int INPUT_A4 = 19;
+constexpr int OUTPUT_B1 = 20;
+constexpr int OUTPUT_B2 = 21;
+constexpr int OUTPUT_B3 = 22;
+constexpr int OUTPUT_B4 = 26;
 
 
 #endif

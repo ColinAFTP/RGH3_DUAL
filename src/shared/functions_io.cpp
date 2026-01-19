@@ -4,11 +4,35 @@
 
 // Initialise the shift registers after the pin modes have been set
 void initShiftRegisters() {
-    pinMode(INPUTS_DATA_PIN, INPUT);
-    pinMode(INPUTS_DATA_CLOCK_PIN, OUTPUT);
-    // Now that pins are configured, construct the object
-    FSI = new FastShiftIn(INPUTS_DATA_PIN, INPUTS_DATA_CLOCK_PIN, MSBFIRST);
+  pinMode(INPUTS_DATA_PIN, INPUT);
+  pinMode(INPUTS_DATA_CLOCK_PIN, OUTPUT);
+  // Now that pins are configured, construct the object
+  FSI = new FastShiftIn(INPUTS_DATA_PIN, INPUTS_DATA_CLOCK_PIN, MSBFIRST);
 }
+
+// Initialise the hardwired CPU1/CPU2 signals in CPU1
+void initCPU1HardIO() {
+  pinMode(OUTPUT_A1, OUTPUT);
+  pinMode(OUTPUT_A2, OUTPUT);
+  pinMode(OUTPUT_A3, OUTPUT);
+  pinMode(OUTPUT_A4, OUTPUT);
+  pinMode(INPUT_B1, INPUT);
+  pinMode(INPUT_B2, INPUT);
+  pinMode(INPUT_B3, INPUT);
+  pinMode(INPUT_B4, INPUT);
+};                  
+
+// Initialise the hardwired CPU1/CPU2 signals in CPU2
+void initCPU2HardIO() {
+  pinMode(OUTPUT_A1, INPUT);
+  pinMode(OUTPUT_A2, INPUT);
+  pinMode(OUTPUT_A3, INPUT);
+  pinMode(OUTPUT_A4, INPUT);
+  pinMode(INPUT_B1, OUTPUT);
+  pinMode(INPUT_B2, OUTPUT);
+  pinMode(INPUT_B3, OUTPUT);
+  pinMode(INPUT_B4, OUTPUT);
+};                  
 
 // Update the inputs
 void inputsUpdate() {
@@ -21,6 +45,13 @@ void inputsUpdate() {
   inputData = FSI->read16();
   // Invert the inputs because there are pull-up resistors
   inputData = ~inputData;
+}
+
+// Map the input data to an array of Boolean variables
+void inputsStrip() {
+  for (int i = 0; i < 16; i++) {
+    digitalInput[i] = (inputData >> i) & 0x01;
+  }
 }
 
 // This subroutine clocks data serially to the 74HC595 chips. There are 2 in series so that 16 relays can be controlled at the same time. 
@@ -58,3 +89,4 @@ void relayControl(word outputData) {
   // Latch new data to outputs
   digitalWrite(RELAY_DATA_LATCH_PIN, 1);
 }
+

@@ -124,6 +124,4 @@ void patternCheck() {
     Serial.println("Error: Pattern selection is out of bounds!");
     modbusServer.holdingRegisterWrite(ADDR_PATTERN, patternSelectionPrevious);
   }
-  Serial.print("   | Current pattern: ");
-  Serial.println(patternSelection);
 }

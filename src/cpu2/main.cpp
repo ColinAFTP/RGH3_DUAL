@@ -5,6 +5,8 @@
 
 #include "functions_i2c.h"
 #include "functions_steppers.h"
+#include "functions_io.h"
+#include "variables.h"
 
 using namespace TS4;
 
@@ -37,6 +39,9 @@ void setup()
   Serial.println("===============================");
   Serial.println();
 
+  // Call initialisation routines
+  initCPU2HardIO();
+
   // Get the start time
   patternUpdateTime = millis();
 
@@ -49,7 +54,44 @@ void loop()
   // last pattern update, then request new pattern values from CPU1
   if (!motorsMoving() && (millis() - patternUpdateTime > 10000)) {
     patternUpdateTime = millis();
+
+    uint32_t readGapPatternsStart = micros();
     readGapPatterns();
+    uint32_t readGapPatternsDuration = micros() - readGapPatternsStart;
+
+    Serial.print("Gap pattern data transfer took ");
+    Serial.print(readGapPatternsDuration);
+    Serial.println(" microseconds");
+
+    uint32_t readIOStart = micros();
+    int status = readIO();
+    uint32_t readIODuration = micros() - readIOStart;
+
+    Serial.print("IO data transfer took ");
+    Serial.print(readIODuration);
+    Serial.println(" microseconds");
+    Serial.print("   | Input data: ");
+    Serial.println(status);
+
+    Serial.println();
   }
-   
+
+static bool lastState = false;                      // Remember previous input state
+bool currentState = digitalRead(INPUT_A1);
+if (currentState && !lastState) {
+    uint32_t readPatternStart = micros();
+    int pattern = readPattern();
+    uint32_t readPatternDuration = micros() - readPatternStart;
+
+    Serial.print("Pattern selection transfer took ");
+    Serial.print(readPatternDuration);
+    Serial.println(" microseconds");
+    Serial.print("   | Current pattern: ");
+    Serial.println(pattern);
+
+    Serial.println();
+  }
+// Update state for next loop
+lastState = currentState;
+
 }

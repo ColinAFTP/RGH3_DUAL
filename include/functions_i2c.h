@@ -3,7 +3,9 @@
 
 void copyToTransmitData();
 void copyFromReceiveData();
-void writeGapPatterns();
+void onI2CRequest();
+int readIO();
+int readPattern();
 void readGapPatterns();
 
 #endif

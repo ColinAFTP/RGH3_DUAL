@@ -11,11 +11,19 @@
 int led = 13;
 uint32_t tickerTime = 0;
 
+void receiveCommand(int howMany) {
+    if (Wire2.available()) {
+        i2cCommand = Wire2.read();   // 1 = status, 2 = gap patterns, etc.
+    }
+}
+
 void setup()
 {
   pinMode(led, OUTPUT);
   Wire2.begin(0x40);                  // Join I2C bus with address #8
-  Wire2.onRequest(writeGapPatterns);   // Register event
+//  Wire2.onRequest(writeGapPatterns);   // Register event
+  Wire2.onReceive(receiveCommand);
+  Wire2.onRequest(onI2CRequest);    // Register event
   Wire2.setClock(1000000);
 
   Serial.begin(9600);                 // Start serial for output
@@ -32,8 +40,9 @@ void setup()
   Serial.println("===============================");
   Serial.println();
 
-  // Initialise shift registers
+  // Call initialisation routines
   initShiftRegisters();
+  initCPU1HardIO();
 
   digitalWrite(led, HIGH); 
 
@@ -65,11 +74,32 @@ void loop()
         Serial.print("   | Input data: ");
         Serial.println(inputData);
         relayControl(inputData);
-        //Check for new pattern requests
-        patternCheck();
       }
     }
   
+    //Check for new pattern requests
+    patternCheck();
+    static uint32_t pulseStartTime = 0;
+    static bool pulseActive = false;
+    if (patternSelection != patternSelectionPrevious) {
+
+      Serial.print("   | Current pattern: ");
+      Serial.println(patternSelection);
+      
+      // Start 500 ms pulse on the new move output pin
+      digitalWrite(OUTPUT_A1, HIGH);
+      pulseStartTime = millis();
+      pulseActive = true;
+
+      patternSelectionPrevious = patternSelection;
+    }
+
+    // Handle pulse timing (non-blocking)
+    if (pulseActive && (millis() - pulseStartTime >= 500)) {
+        digitalWrite(OUTPUT_A1, LOW);
+        pulseActive = false;
+    }
+
 }
 
 
