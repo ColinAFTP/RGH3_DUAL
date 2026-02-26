@@ -7,9 +7,11 @@
 #include "functions_io.h"
 #include "variables.h"
 
-
-int led = 13;
-uint32_t tickerTime = 0;
+// Set up local variables
+static uint32_t inputUpdateTime;
+static uint32_t dataUpdateTime;
+static uint32_t pulseStartTime;
+static bool pulseActive = false;
 
 void receiveCommand(int howMany) {
     if (Wire2.available()) {
@@ -19,7 +21,6 @@ void receiveCommand(int howMany) {
 
 void setup()
 {
-  pinMode(led, OUTPUT);
   Wire2.begin(0x40);                  // Join I2C bus with address #8
 //  Wire2.onRequest(writeGapPatterns);   // Register event
   Wire2.onReceive(receiveCommand);
@@ -44,7 +45,8 @@ void setup()
   initShiftRegisters();
   initCPU1HardIO();
 
-  digitalWrite(led, HIGH); 
+  // Indicate that gap patterns should be loaded from the PLC on startup
+  bootLoadGaps = true;
 
   // Set up the Modbus server and address locations
   modbusSetup();
@@ -55,6 +57,11 @@ void setup()
   // Get the start time
   tickerTime = millis();
 
+  // Initialise local variables
+  inputUpdateTime = millis();
+  dataUpdateTime = millis();
+  pulseStartTime = millis();
+
 }
 
 void loop()
@@ -64,23 +71,18 @@ void loop()
     ethernetConnect();
   } else {
 
-      // Poll for Modbus TCP requests
-      modbusServer.poll();
-
-      // 2 second timer
-      if (millis() - tickerTime > 2000) {
-        tickerTime = millis();
-        inputsUpdate();
-        Serial.print("   | Input data: ");
-        Serial.println(inputData);
-        relayControl(inputData);
-      }
-    }
+    // Poll for Modbus TCP requests
+    modbusServer.poll();
   
-    //Check for new pattern requests
+    // Check for new pattern gap data from the PLC
+    if ((millis() - dataUpdateTime >= 5000) || bootLoadGaps) {  // Check every 5 s or on boot load
+      patternUpdateCheck();
+      dataUpdateTime = millis();
+      bootLoadGaps = false;
+    }
+
+    // Check for new pattern requests
     patternCheck();
-    static uint32_t pulseStartTime = 0;
-    static bool pulseActive = false;
     if (patternSelection != patternSelectionPrevious) {
 
       Serial.print("   | Current pattern: ");
@@ -94,11 +96,51 @@ void loop()
       patternSelectionPrevious = patternSelection;
     }
 
-    // Handle pulse timing (non-blocking)
-    if (pulseActive && (millis() - pulseStartTime >= 500)) {
-        digitalWrite(OUTPUT_A1, LOW);
-        pulseActive = false;
+    // Check for relay updates
+    relayCheck();
+    if (relayData != relayDataPrevious) {
+      Serial.print("   | New relay data: ");
+      Serial.println(relayData, BIN);
+      relayControl(relayData);
+      relayDataPrevious = relayData;
     }
+
+    // Check for speed updates
+    speedCheck();
+    if (speedData != speedDataPrevious) {
+      Serial.print("   | New speed data: ");
+      Serial.println(speedData);
+      stepperSpeed = speedData;
+      speedDataPrevious = speedData;
+    }
+
+  }
+
+  // Check for new input updates every 25 ms
+  if (millis() - inputUpdateTime >= 25) {  // Update every 25 ms
+    inputsCheck();
+    inputUpdateTime = millis();
+  }
+  if (inputData != inputDataPrevious) {
+    Serial.print("   | New input data: ");
+    Serial.println(inputData, BIN);
+    updateInputs();
+    inputDataPrevious = inputData;
+  }
+
+  // Handle pulse timing (non-blocking)
+  if (pulseActive && (millis() - pulseStartTime >= 500)) {
+      digitalWrite(OUTPUT_A1, LOW);
+      pulseActive = false;
+  }
+
+  // Update the ticker every second
+  if (millis() - tickerTime > 1000) {
+    secondTicker++;
+    tickerTime = millis();
+    updateTicker(secondTicker);
+  }
+
 
 }
 

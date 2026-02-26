@@ -1,9 +1,11 @@
-#include <Arduino.h>
-#include <constants.h>
+#ifndef STRUCTURES_H
+#define STRUCTURES_H
 
-// struct i2cData
-// {
-//   float i2cValue[18];
-//   // float b;
-//   // float c;
-// };
+#include "constants.h"
+
+typedef struct {
+    float patternData[NUM_PATTERNS][NUM_GAPS];
+    int stepperSpeed;
+} PatternPacket;
+
+#endif

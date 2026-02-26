@@ -92,9 +92,9 @@ void modbusSetup() {
   modbusServer.configureInputRegisters(101, 10);
   
   // Set up holding registers
-  // Holding register range is 101 - 150
+  // Holding register range is 101 - 160
   // Holding registers are read/write from the PLC.
-  modbusServer.configureHoldingRegisters(101, 50);
+  modbusServer.configureHoldingRegisters(101, 60);
 }
 
 void ethernetConnect() {
@@ -115,13 +115,69 @@ void ethernetConnect() {
   }
 }
 
+void updateInputs() {
+  // Save input data to holding register 3
+  modbusServer.holdingRegisterWrite(ADDR_INPUTS, inputData);
+}
+
 void patternCheck() {
   // Check which pattern selection must go to the stepper motors
   patternSelection = modbusServer.holdingRegisterRead(ADDR_PATTERN);
   if (patternSelection < 0 or patternSelection >= NUM_PATTERNS) {
-    patternSelection = 0;
+    patternSelection = patternSelectionPrevious;
     Serial.println();
     Serial.println("Error: Pattern selection is out of bounds!");
     modbusServer.holdingRegisterWrite(ADDR_PATTERN, patternSelectionPrevious);
+  }
+}
+
+void relayCheck() {
+  // Check for relay control updates from the PLC
+  relayData = modbusServer.holdingRegisterRead(ADDR_RELAYS);
+  if (relayData < 0 or relayData > 0xFFFF) {
+    relayData = relayDataPrevious;
+    Serial.println();
+    Serial.println("Error: Relay data is out of bounds!");
+    modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayDataPrevious);}
+}
+
+void updateTicker(word tickerData) {
+  // Update the ticker value in the holding register
+  modbusServer.holdingRegisterWrite(ADDR_TICKER, tickerData);
+  // Write the ticker value to the serial output every 10th count
+  if (tickerData % 10 == 0) {
+    Serial.print("   | New ticker value: ");
+    Serial.println(tickerData / 10);
+  }
+}
+
+void speedCheck() {
+  // Check for speed data updates from the PLC
+  speedData = modbusServer.holdingRegisterRead(ADDR_SPEED);
+  if (speedData < 0 or speedData > MAX_SPEED) {
+    speedData = speedDataPrevious;
+    Serial.println();
+    Serial.println("Error: Speed data is out of bounds!");
+    modbusServer.holdingRegisterWrite(ADDR_SPEED, speedDataPrevious);
+  }
+}
+
+void patternUpdateCheck() {
+  // This functions checks for pattern updates from the PLC
+  bool patternUpdateFlag = modbusServer.coilRead(ADDR_GAP_UPDATE);  
+  if ((patternUpdateFlag == true) ||(bootLoadGaps == true)) {
+    Serial.println("Pattern update requested from PLC.");           
+    // Clear the pattern update flag
+    modbusServer.coilWrite(ADDR_GAP_UPDATE, 0);
+    // Update the pattern 0 gaps
+    Serial.println("Updating pattern 0 gaps.");
+    for (int c = 0; c < NUM_GAPS; c++) {
+      gapArrays[0][c] = modbusServer.holdingRegisterRead(ADDR_PATTERN_0_0 + c);
+      Serial.print("New pattern 0 gap #");
+      Serial.print(c + 1);
+      Serial.print(": ");
+      Serial.println(gapArrays[0][c]);
+    }
+
   }
 }

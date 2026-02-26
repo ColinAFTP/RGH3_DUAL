@@ -35,7 +35,7 @@ void initCPU2HardIO() {
 };                  
 
 // Update the inputs
-void inputsUpdate() {
+void inputsCheck() {
   // Pulse the load pin to load the current inputs into the shift registers
   digitalWrite(INPUTS_DATA_LOAD_PIN, LOW);
   delay(1);
