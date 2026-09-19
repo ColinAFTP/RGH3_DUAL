@@ -84,6 +84,9 @@ void feedbackCheck() {
   bool atTarget = digitalRead(INPUT_B2);
   bool fault = digitalRead(INPUT_B3);
   bool atHome = ((inputData & PROXY_ALL_MASK) == PROXY_ALL_MASK) && !fault;
+  statusHome = atHome;
+  statusAtTarget = atTarget;
+  statusFault = fault;
 
   // Update the Modbus discrete status bits
   modbusServer.discreteInputWrite(ADDR_HOME, atHome);

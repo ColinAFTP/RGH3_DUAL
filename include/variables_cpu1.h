@@ -30,4 +30,15 @@ extern uint32_t tickerTime;
 extern uint16_t secondTicker;
 extern bool bootLoadGaps;
 
+// Status calculated by feedbackCheck() and shown on the web page
+extern bool statusHome;                 // All home proximity sensors on and no fault
+extern bool statusAtTarget;             // CPU2 says a move or homing has finished
+extern bool statusFault;                // CPU2 has a homing fault
+
+// Status packets received from CPU2 over I2C. The receive interrupt fills the ring, the main loop empties it.
+constexpr int STATUS_RING_SIZE = 4;
+extern StatusPacket statusRing[STATUS_RING_SIZE];
+extern volatile uint8_t statusRingHead;
+extern volatile uint8_t statusRingTail;
+
 #endif

@@ -5,6 +5,7 @@
 
 #include "functions_homing.h"
 #include "functions_i2c.h"
+#include "functions_status.h"
 #include "functions_steppers.h"
 #include "functions_io.h"
 #include "variables.h"
@@ -67,6 +68,8 @@ void setup()
   dataUpdateTime = millis() - 10000;
   plotTime = millis();
 
+  statusEvent(EVT_BOOT);
+
   // Home automatically if not all the home sensors are on
   homingStartup();
 
@@ -75,12 +78,16 @@ void setup()
 void loop()
 {
 
+  // Send the status and queued events to CPU1 for its web page
+  statusService();
+
   // Detect the end of a TeensyStep move, and run the homing routine
   bool moveFinished = moveService();
   homingService(moveFinished);
 
   // A finished pattern move (or a TeensyStep only home) means at target. While homing, the next stage continues instead.
   if (moveFinished && !homingActive()) {
+    statusEvent(EVT_MOVE_DONE);
     digitalWrite(OUTPUT_B2, HIGH);
   }
 
@@ -114,32 +121,42 @@ void loop()
     if (busy) {
       // Do nothing else: reading data or changing speeds here would disturb the running move
       Serial.println("Move requested while already moving - ignored.");
+      statusEvent(EVT_REFUSED, EVT_REASON_BUSY);
     } else if (faultActive()) {
       Serial.println("Move refused: homing fault is active.");
+      statusEvent(EVT_REFUSED, EVT_REASON_FAULT);
     } else {
       int pattern = readPattern();
       Serial.print("   | Current pattern: ");
       Serial.println(pattern);
+      statusEvent(EVT_TRIGGER, pattern);
 
       // Refresh the gap data and speed straight away so the move never uses stale values
       if (pattern < 0 || pattern > NUM_PATTERNS) {
         Serial.println("Move aborted: invalid pattern received from CPU1.");
+        statusEvent(EVT_REFUSED, EVT_REASON_BAD_PATTERN);
       } else if (!readGapPatterns()) {
         Serial.println("Move aborted: could not refresh gap data from CPU1.");
+        statusEvent(EVT_REFUSED, EVT_REASON_NO_GAPS);
       } else if (pattern == 0) {
         // Pattern 0 is home
         if (!homeRequest()) {
           Serial.println("Home request failed.");
+          statusEvent(EVT_REFUSED, EVT_REASON_HOME_FAILED);
         }
       } else if (!positionsKnown()) {
         // Only refused while the stepper positions are unknown (power up before the first home, or after a fault).
         // Moving from one pattern to another without going home in between is allowed.
         Serial.println("Move refused: stepper positions unknown, home first.");
+        statusEvent(EVT_REFUSED, EVT_REASON_UNKNOWN_POS);
       } else if (stepTargetCalc(pattern)) {
         updateStepperSpeeds(stepperSpeed);
-        triggerMove();
+        if (triggerMove()) {
+          statusEvent(EVT_MOVE_START, pattern);
+        }
       } else {
         Serial.println("Move aborted: targets not valid.");
+        statusEvent(EVT_REFUSED, EVT_REASON_BAD_TARGETS);
       }
     }
   }

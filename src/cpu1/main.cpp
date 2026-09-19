@@ -5,6 +5,7 @@
 #include "functions_comms.h"
 #include "functions_i2c.h"
 #include "functions_io.h"
+#include "functions_web.h"
 #include "variables_cpu1.h"
 
 // Set up local variables
@@ -24,6 +25,14 @@ void receiveCommand(int howMany) {
             mask |= (uint16_t)Wire2.read() << 8;
             faultMaskRx = mask;
             faultMaskNew = true;         // The main loop copies it to the Modbus register
+        } else if (i2cCommand == I2C_CMD_STATUS && Wire2.available() >= (int)sizeof(StatusPacket)) {
+            // Status from CPU2 for the web page. It goes into a small ring that the main loop empties.
+            uint8_t next = (statusRingHead + 1) % STATUS_RING_SIZE;
+            if (next != statusRingTail) {
+                uint8_t* dest = (uint8_t*)&statusRing[statusRingHead];
+                for (size_t i = 0; i < sizeof(StatusPacket); i++) dest[i] = Wire2.read();
+                statusRingHead = next;
+            }
         }
     }
 }
@@ -53,6 +62,9 @@ void setup()
   // Set up the Modbus server and address locations
   modbusSetup();
 
+  // Start the diagnostics web server
+  webSetup();
+
   // Clear the relay outputs
   relayControl(0);
 
@@ -77,6 +89,9 @@ void setup()
 void loop()
 {
 
+  // Measure how long each pass of the loop takes (shown on the web page)
+  webLoopTick();
+
   // Poll for Modbus TCP requests (server stays active even if client drops)
   modbusServer.poll();
 
@@ -92,12 +107,25 @@ void loop()
     }
   }
 
+  // Serve the diagnostics web page (non-blocking) and decode the status that CPU2 sent
+  webService();
+  cpu2StatusService();
+
+  // Log when the PLC connects or disconnects
+  static bool plcWasConnected = false;
+  bool plcConnected = ethernetClient.connected();
+  if (plcConnected != plcWasConnected) {
+    logEvent(plcConnected ? "PLC connected" : "PLC disconnected");
+    plcWasConnected = plcConnected;
+  }
+
   // Check for new pattern requests
   patternCheck();
   if (patternSelection != patternSelectionPrevious) {
 
     Serial.print("   | Current pattern: ");
     Serial.println(patternSelection);
+    logEvent(patternSelection == 0 ? "PLC selected pattern 0 (home)" : "PLC selected pattern %d", patternSelection);
 
     // Refresh the gap data and speed from the PLC now, so CPU2 always moves with the latest values
     patternUpdateCheck();
@@ -120,6 +148,10 @@ void loop()
 
   // Check feedback signals (at home, at target) and update relay bits
   feedbackCheck();
+  static bool prevHome = false, prevTarget = false, prevFault = false;
+  if (statusHome != prevHome) { logEvent("Home %s", statusHome ? "ON" : "OFF"); prevHome = statusHome; }
+  if (statusAtTarget != prevTarget) { logEvent("At target %s", statusAtTarget ? "ON" : "OFF"); prevTarget = statusAtTarget; }
+  if (statusFault != prevFault) { logEvent("Homing fault %s", statusFault ? "ON" : "cleared"); prevFault = statusFault; }
 
   if (relayData != relayDataPrevious) {
     Serial.print("   | New relay data: ");
@@ -133,6 +165,7 @@ void loop()
   if (speedData != speedDataPrevious) {
     Serial.print("   | New speed data: ");
     Serial.println(speedData);
+    logEvent("PLC speed set to %d", speedData);
     stepperSpeed = speedData;
     speedDataPrevious = speedData;
   }
@@ -166,6 +199,7 @@ void loop()
   if (modbusServer.coilRead(ADDR_FAULT_RESET)) {
     modbusServer.coilWrite(ADDR_FAULT_RESET, 0);
     Serial.println("   | Fault reset requested by PLC");
+    logEvent("PLC requested a fault reset");
     digitalWrite(OUTPUT_A3, HIGH);
     faultPulseStartTime = millis();
     faultPulseActive = true;

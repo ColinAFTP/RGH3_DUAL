@@ -137,6 +137,42 @@ constexpr uint8_t I2C_CMD_GAPS = 2;                     // Request: all gap patt
 constexpr uint8_t I2C_CMD_PATTERN = 3;                  // Request: pattern selection (int)
 constexpr uint8_t I2C_CMD_FAULT_MASK = 4;               // Write: followed by the 16 bit failed spreader bitmask, low byte first. CPU1 copies it to ADDR_FAULT_SPREADERS
 
+// CPU2 status and event reporting to CPU1 (for the CPU1 web page)
+constexpr uint8_t I2C_CMD_STATUS = 5;                   // Write: a StatusPacket (see structures.h)
+constexpr int STATUS_MAX_EVENTS = 6;                    // Events carried by one status packet
+constexpr uint32_t STATUS_PERIOD_MS = 250;              // CPU2 sends its status this often. Not sent while the direct pulse homing stage is polling the sensors
+
+// CPU2 states reported in StatusPacket.state
+constexpr uint8_t STATE_IDLE = 0;                       // Standing still, positions known
+constexpr uint8_t STATE_MOVING = 1;                     // TeensyStep pattern move
+constexpr uint8_t STATE_HOMING_APPROACH = 2;            // Homing: TeensyStep approach move
+constexpr uint8_t STATE_HOMING_PULSES = 3;              // Homing: direct pulse stage
+constexpr uint8_t STATE_FAULT = 4;                      // Homing fault active
+constexpr uint8_t STATE_UNKNOWN_POS = 5;                // Standing still but positions unknown (not homed yet)
+
+// Event codes sent by CPU2 (StatusEvent.code) and the meaning of the argument
+constexpr uint8_t EVT_BOOT = 1;                         // CPU2 started
+constexpr uint8_t EVT_POWERUP_HOME = 2;                 // Power up with all home sensors on
+constexpr uint8_t EVT_POWERUP_SEARCH = 3;               // Power up without all home sensors on, search home started
+constexpr uint8_t EVT_TRIGGER = 4;                      // Start move trigger seen. Arg = pattern
+constexpr uint8_t EVT_MOVE_START = 5;                   // Pattern move started. Arg = pattern
+constexpr uint8_t EVT_MOVE_DONE = 6;                    // Pattern move (or TeensyStep only home) finished
+constexpr uint8_t EVT_HOME_START = 7;                   // Homing started. Arg: 0 = TeensyStep only, 1 = approach then pulses, 2 = search (pulses only)
+constexpr uint8_t EVT_HOME_PULSES = 8;                  // Direct pulse stage started
+constexpr uint8_t EVT_HOME_DONE = 9;                    // Homing complete
+constexpr uint8_t EVT_HOME_FAULT = 10;                  // Homing fault. Arg = failed spreader bitmask
+constexpr uint8_t EVT_FAULT_RESET = 11;                 // Fault reset, search home started
+constexpr uint8_t EVT_REFUSED = 12;                     // Request refused. Arg = EVT_REASON_ constant
+constexpr uint8_t EVT_IO_FAIL = 13;                     // Home sensors could not be read over I2C, pulses stopped
+
+constexpr int EVT_REASON_BUSY = 1;                      // Already moving or homing
+constexpr int EVT_REASON_FAULT = 2;                     // Homing fault active
+constexpr int EVT_REASON_UNKNOWN_POS = 3;               // Stepper positions unknown, home first
+constexpr int EVT_REASON_BAD_PATTERN = 4;               // Invalid pattern received
+constexpr int EVT_REASON_NO_GAPS = 5;                   // Could not refresh the gap data from CPU1
+constexpr int EVT_REASON_BAD_TARGETS = 6;               // Targets outside the rack travel
+constexpr int EVT_REASON_HOME_FAILED = 7;               // Home request failed
+
 // CPU1 pin numbers
 // ================
 // Relay shift register pins

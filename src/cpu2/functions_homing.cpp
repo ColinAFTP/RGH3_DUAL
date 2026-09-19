@@ -3,6 +3,7 @@
 #include "constants.h"
 #include "functions_homing.h"
 #include "functions_i2c.h"
+#include "functions_status.h"
 #include "functions_steppers.h"
 #include "variables.h"
 
@@ -122,6 +123,7 @@ void raiseFault(uint16_t mask) {
   digitalWrite(OUTPUT_B3, HIGH);
   Serial.print("HOMING FAULT. Failed spreader bitmask: 0x");
   Serial.println(mask, HEX);
+  statusEvent(EVT_HOME_FAULT, mask);
   publishMask();
 }
 
@@ -143,6 +145,7 @@ void beginCascade() {
   homeState = HOME_CASCADE;
   pulseTimer.begin(pulseISR, HOME_TICK_US);
   Serial.println("Homing: direct pulse routine started.");
+  statusEvent(EVT_HOME_PULSES);
 }
 
 void completeHoming() {
@@ -152,6 +155,7 @@ void completeHoming() {
   homeState = HOME_IDLE;
   digitalWrite(OUTPUT_B2, HIGH);
   Serial.println("Homing complete: all spreaders home.");
+  statusEvent(EVT_HOME_DONE);
 }
 
 // One pass of the direct pulse routine, called every loop
@@ -160,7 +164,8 @@ void cascadeStep() {
   if (io < 0) {
     // Never move blind: stop until the sensors can be read again
     stopAllRunning();
-    if (++ioFailCount >= HOME_IO_FAIL_LIMIT) {
+    if (++ioFailCount == 1) statusEvent(EVT_IO_FAIL);
+    if (ioFailCount >= HOME_IO_FAIL_LIMIT) {
       raiseFault(allSpreadersMask());
     }
     return;
@@ -212,8 +217,10 @@ void homingStartup() {
     posKnown = true;
     digitalWrite(OUTPUT_B2, HIGH);
     Serial.println("Power up: all home sensors on, gripper is home.");
+    statusEvent(EVT_POWERUP_HOME);
   } else {
     Serial.println("Power up: not all home sensors on, starting search home.");
+    statusEvent(EVT_POWERUP_SEARCH);
     beginCascade();
   }
 }
@@ -223,6 +230,7 @@ bool homeRequest() {
 
   if (!posKnown) {
     // Positions cannot be trusted: search home with the direct pulse routine only
+    statusEvent(EVT_HOME_START, 2);
     beginCascade();
     return true;
   }
@@ -232,11 +240,13 @@ bool homeRequest() {
 
   if (HOME_APPROACH_STEPS <= 0) {
     // TeensyStep all the way to position 0, no direct pulse stage
+    statusEvent(EVT_HOME_START, 0);
     if (!stepTargetCalc(0)) return false;
     return triggerMove();
   }
 
   // TeensyStep to HOME_APPROACH_MM from home (steppers already closer stay where they are), then the direct pulse routine
+  statusEvent(EVT_HOME_START, 1);
   bool anyMove = false;
   for (int i = 0; i < NUM_GAPS; i++) {
     long target = stepperPositions[i] < HOME_APPROACH_STEPS ? stepperPositions[i] : HOME_APPROACH_STEPS;
@@ -284,10 +294,23 @@ bool faultActive() {
 void faultReset() {
   if (!faultOn) return;
   Serial.println("Fault reset: starting search home.");
+  statusEvent(EVT_FAULT_RESET);
   faultOn = false;
   digitalWrite(OUTPUT_B3, LOW);
   faultMaskValue = 0;
   maskPublished = false;
   publishMask();
   beginCascade();
+}
+
+int homingStage() {
+  switch (homeState) {
+    case HOME_APPROACH: return 1;
+    case HOME_CASCADE: return 2;
+    default: return 0;
+  }
+}
+
+uint16_t faultMask() {
+  return faultMaskValue;
 }

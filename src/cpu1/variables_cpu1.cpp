@@ -20,3 +20,13 @@ int speedDataPrevious = 0;
 uint32_t tickerTime = 0;
 uint16_t secondTicker = 0;
 bool bootLoadGaps = false;
+
+// Status calculated by feedbackCheck()
+bool statusHome = false;
+bool statusAtTarget = false;
+bool statusFault = false;
+
+// Status packets received from CPU2
+StatusPacket statusRing[STATUS_RING_SIZE];
+volatile uint8_t statusRingHead = 0;
+volatile uint8_t statusRingTail = 0;
