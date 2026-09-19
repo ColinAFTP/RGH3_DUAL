@@ -25,10 +25,11 @@ void initCPU1HardIO() {
 
 // Initialise the hardwired CPU1/CPU2 signals in CPU2
 void initCPU2HardIO() {
-  pinMode(INPUT_A1, INPUT);
-  pinMode(INPUT_A2, INPUT);
-  pinMode(INPUT_A3, INPUT);
-  pinMode(INPUT_A4, INPUT);
+  // Pull-downs so a disconnected wire reads LOW instead of floating and giving false triggers
+  pinMode(INPUT_A1, INPUT_PULLDOWN);
+  pinMode(INPUT_A2, INPUT_PULLDOWN);
+  pinMode(INPUT_A3, INPUT_PULLDOWN);
+  pinMode(INPUT_A4, INPUT_PULLDOWN);
   pinMode(OUTPUT_B1, OUTPUT);
   pinMode(OUTPUT_B2, OUTPUT);
   pinMode(OUTPUT_B3, OUTPUT);

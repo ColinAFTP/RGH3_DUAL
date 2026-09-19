@@ -66,3 +66,13 @@ Housekeeping
 ## Session log
 
 - 2026-09-19: Review, checkpoint commit 12cc709, then correctness/robustness fixes (commit d74b415): stale-data fix (CPU1 refreshes on pattern change, CPU2 re-reads on trigger), target validation, non-blocking moves, at-home/at-target signals, staged gap copy, timed serial wait, debug flags. Builds clean; NOT yet bench-tested. Next: bench test on desk board, then homing (proximity sensors via I2C cmd 1 `readIO`), then manual mode (DIP switch), then housekeeping.
+
+## Bench testing (desk board, no gripper)
+
+- Flashing: press the Teensy program button when `pio run -e <env> -t upload` starts; the auto-reboot does not work. With BOTH boards on USB the loader "auto-searches" and can flash the wrong one (it did: CPU1 firmware landed on CPU2). **Unplug the other board's USB before flashing.** Do not kill `teensy.exe` before the loader has rebooted the board (leaves it in bootloader mode; power-cycle to recover). Both boards are externally powered.
+- Serial: only one program can hold a COM port. Plotter (VS Code) and my logging cannot share COM10. Windows shows one serial number per board: CPU1 = 18203890 (COM9), CPU2 = 18203150 (COM10).
+- `tools/modbus_test.js` (Node, no libraries) drives CPU1's Modbus server at 192.168.2.51 for timing-critical tests (`node tools/modbus_test.js`, or `... zero` to return to zero). CPU1 accepts ONE Modbus client at a time, so disconnect the simulator first. Register addresses are raw protocol addresses as in constants.h.
+- Set `DEBUG_PLOT = true` in constants.h and reflash CPU2 to feed the VS Code Serial Plotter (values in mm).
+- Results 2026-09-19: pattern 1 (30 mm gaps) moves 9 steppers together to 150/120/90/60/30 mm, ~2.3 s at speed 5000; return to zero reaches 0.00 on all nine; over-limit pattern (50 mm gaps, 17684 steps) is refused with no motion; pattern 7 rejected by CPU1; gaps written then pattern selected 14 ms later moves to the NEW gaps (stale-data fix confirmed); trigger during a move is ignored; At Target (118) rises at move end, Home (117) rises when all positions are 0.
+- Still untested: I2C behaviour with CPU1 absent (`requestFrom` may succeed with zeros, which would look like an all-zero valid pattern), homing, manual mode, real motors.
+- Known limitation: a pattern selected mid-move is dropped by CPU2 while CPU1 records it as current (PLC must wait for At Target).

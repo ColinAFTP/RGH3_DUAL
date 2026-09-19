@@ -86,6 +86,12 @@ void loop()
   bool currentInputA1State = digitalRead(INPUT_A1);
   if (currentInputA1State && !lastInputA1State) {
     Serial.println("Trigger signal (INPUT_A1) detected!");
+    if (moveInProgress()) {
+      // Do nothing else: reading data or changing speeds here would disturb the running move
+      Serial.println("Move requested while already moving - ignored.");
+      lastInputA1State = currentInputA1State;
+      return;
+    }
     int pattern = readPattern();
     Serial.print("   | Current pattern: ");
     Serial.println(pattern);
