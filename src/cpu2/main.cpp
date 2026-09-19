@@ -132,7 +132,9 @@ void loop()
           Serial.println("Home request failed.");
         }
       } else if (!positionsKnown()) {
-        Serial.println("Move refused: gripper is not homed.");
+        // Only refused while the stepper positions are unknown (power up before the first home, or after a fault).
+        // Moving from one pattern to another without going home in between is allowed.
+        Serial.println("Move refused: stepper positions unknown, home first.");
       } else if (stepTargetCalc(pattern)) {
         updateStepperSpeeds(stepperSpeed);
         triggerMove();
