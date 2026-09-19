@@ -10,17 +10,17 @@
 
 // Define the arrays for each individual gap pattern. The number of arrays must equal the
 // NUM_PATTERNS constant declared in constants.h
-extern float gapPattern0[NUM_GAPS];
-extern float gapPattern1[NUM_GAPS];
-extern float gapPattern2[NUM_GAPS];
-extern float gapPattern3[NUM_GAPS];
-extern float gapPattern4[NUM_GAPS];
-extern float gapPattern5[NUM_GAPS];
+extern float gapPattern0[STRIDE_GAPS];
+extern float gapPattern1[STRIDE_GAPS];
+extern float gapPattern2[STRIDE_GAPS];
+extern float gapPattern3[STRIDE_GAPS];
+extern float gapPattern4[STRIDE_GAPS];
+extern float gapPattern5[STRIDE_GAPS];
 
 // Variables used for I2C communications
 extern PatternPacket transmitPacket; 
 extern PatternPacket receivePacket;
-extern float gapArrays[NUM_PATTERNS][NUM_GAPS]; 
+extern float gapArrays[NUM_PATTERNS][STRIDE_GAPS]; 
 extern int stepperSpeed;
 extern volatile uint8_t i2cCommand;
 

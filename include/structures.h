@@ -4,7 +4,7 @@
 #include "constants.h"
 
 typedef struct {
-    float patternData[NUM_PATTERNS][NUM_GAPS];
+    float patternData[NUM_PATTERNS][STRIDE_GAPS];
     int stepperSpeed;
 } PatternPacket;
 

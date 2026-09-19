@@ -21,6 +21,25 @@ uint32_t dataUpdateTime;
 uint32_t positionUpdateTime;
 static bool lastInputA1State = false;                      // Remember previous input state
 
+IntervalTimer t1;
+
+// This callback function is called by the interval timer to plot the stepper positions.
+void onTimer() {
+  updateStepperPositions();
+  Serial.print(">");
+  for (int i = 0; i < NUM_GAPS; i++) {
+    Serial.print("S");
+    Serial.print(i + 1);
+    Serial.print(":");
+    Serial.print(stepperPositions[i] / STEPS_PER_MM);
+    Serial.print(" mm");
+    if (i < NUM_GAPS - 1) {
+      Serial.print(",");
+    }
+  }
+  Serial.println();
+}
+
 void setup()
 {
   pinMode(led, OUTPUT);
@@ -49,8 +68,12 @@ void setup()
   // Call initialisation routines
   initCPU2HardIO();
 
+  // Start the plotting timer (50 ms interval)
+  t1.begin(onTimer, 50000);
+
   // Initialise the update time variables
-  dataUpdateTime = millis();
+  // Set to trigger an immediate update on the first loop
+  dataUpdateTime = millis() - 10000;
   positionUpdateTime = millis();
 
 }
@@ -66,47 +89,20 @@ void loop()
       dataUpdateTime = millis();
 
       // Request new pattern gap data from CPU1
+      Serial.println("Housekeeping: Updating gap patterns from CPU1...");
       uint32_t readGapPatternsStart = micros();
       readGapPatterns();
       uint32_t readGapPatternsDuration = micros() - readGapPatternsStart;
-      Serial.print("Gap pattern data transfer took ");
-      Serial.print(readGapPatternsDuration);
-      Serial.println(" microseconds");
-      // Serial.println("Pattern 0 gaps.");
-      // for (int c = 0; c < NUM_GAPS; c++) {
-      //   Serial.print("Pattern 0 gap #");
-      //   Serial.print(c + 1);
-      //   Serial.print(": ");
-      //   Serial.println(gapArrays[0][c]);
-      // }
-      Serial.println();
-
-      // Request new input data from CPU1
-      uint32_t readIOStart = micros();
-      int status = readIO();
-      uint32_t readIODuration = micros() - readIOStart;
-      Serial.print("IO data transfer took ");
-      Serial.print(readIODuration);
-      Serial.println(" microseconds");
-      Serial.print("   | Input data: ");
-      Serial.println(status);
-      Serial.println();
+      // Serial.print("Gap pattern data transfer took ");
+      // Serial.print(readGapPatternsDuration);
+      // Serial.println(" microseconds");
     }
-
-    // Update stepper positions every 100ms
-    if (millis() - positionUpdateTime > 100) {
-      positionUpdateTime = millis();
-      updateStepperPositions();
-    }
-
   }
 
   // Check for new pattern movement requests
-  // Hardwired to input A1 so that CPU1 can trigger pattern movements by changing the state of A1.
-  // This is because the I2C communication for pattern data transfer is relatively slow, so we want to avoid it being triggered too frequently. 
-  // By using a hardwired input, CPU1 can control exactly when CPU2 requests new pattern data, which is typically only when the stepper motors are standing still and a new pattern needs to be loaded.
   bool currentInputA1State = digitalRead(INPUT_A1);
   if (currentInputA1State && !lastInputA1State) {
+    Serial.println("Trigger signal (INPUT_A1) detected!");
     uint32_t readPatternStart = micros();
     int pattern = readPattern();
     uint32_t readPatternDuration = micros() - readPatternStart;
@@ -124,6 +120,9 @@ void loop()
 
     // Update the stepper speeds based on the latest value received from CPU1
     updateStepperSpeeds(stepperSpeed);
+
+    // Trigger the movement (blocking)
+    triggerMove(pattern);
   }
 
   // Update state for next loop

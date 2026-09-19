@@ -7,7 +7,7 @@
 // Copy values from each gap pattern to a single array to be used for I2C communications
 void copyToTransmitData() {
     for (int r = 0; r < NUM_PATTERNS; r++) {
-        for (int c = 0; c < NUM_GAPS; c++) {
+        for (int c = 0; c < STRIDE_GAPS; c++) {
             transmitPacket.patternData[r][c] = gapArrays[r][c];
         }
     }
@@ -18,7 +18,7 @@ void copyToTransmitData() {
 // Copy values from a single array used for I2C communications to each gap pattern
 void copyFromReceiveData() {
     for (int r = 0; r < NUM_PATTERNS; r++) {
-        for (int c = 0; c < NUM_GAPS; c++) {
+        for (int c = 0; c < STRIDE_GAPS; c++) {
             gapArrays[r][c] = receivePacket.patternData[r][c];
         }
     }
@@ -54,9 +54,9 @@ int readIO() {
   Wire2.write(1);
   Wire2.endTransmission();
 
-  Serial.print("Requesting ("); 
-  Serial.print(sizeof value); 
-  Serial.println(" bytes)... ");
+//   Serial.print("Requesting ("); 
+//   Serial.print(sizeof value); 
+//   Serial.println(" bytes)... ");
   if (Wire2.requestFrom(0x40, sizeof(value))) {
     Wire2.readBytes((byte*)&value, sizeof(value));
     return value;
@@ -73,9 +73,9 @@ void readGapPatterns() {
     Wire2.write(2);
     Wire2.endTransmission();
 
-    Serial.print("Requesting (");
-    Serial.print(sizeof(receivePacket));
-    Serial.println(" bytes)... ");
+    // Serial.print("Requesting (");
+    // Serial.print(sizeof(receivePacket));
+    // Serial.println(" bytes)... ");
 
     if (Wire2.requestFrom(0x40, sizeof(receivePacket))) {
         Wire2.readBytes((byte*)&receivePacket, sizeof(receivePacket));
@@ -95,9 +95,9 @@ int readPattern() {
   Wire2.write(3);
   Wire2.endTransmission();
 
-  Serial.print("Requesting ("); 
-  Serial.print(sizeof value); 
-  Serial.println(" bytes)... ");
+//   Serial.print("Requesting ("); 
+//   Serial.print(sizeof value); 
+//   Serial.println(" bytes)... ");
   if (Wire2.requestFrom(0x40, sizeof(value))) {
     Wire2.readBytes((byte*)&value, sizeof(value));
     return value;

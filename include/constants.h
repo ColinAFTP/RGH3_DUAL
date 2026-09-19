@@ -76,7 +76,7 @@ const int ADDR_MANUAL_CLS = 106;        // Manual move spreader in close directi
 
 // Modbus status address constants
 const int ADDR_HOME = 117;              // Gripper spreaders at their pickup positions 
-const int ADDR_MOVE_DONE = 118;         // Gripper spreaders finsihed moving
+const int ADDR_MOVE_DONE = 118;         // Gripper spreaders finished moving
 const int ADDR_MANUAL_MODE = 119;       // Gripper is in manual mode
 
 // General constants
@@ -91,8 +91,9 @@ constexpr int MAX_STEPS = 16000;            // 16,000 is the maximum amount of s
 constexpr float STEPS_PER_MM = 70.73553;    // Racks & pinions are mod 2, so tooth pitch is 2xPi mm. Pinions have 18 teeth. Distance per revolution is 113.0973 mm. There are 8000 steps per revolution, so distance per step is 0.014137 mm
 
 // Pattern constants
-constexpr int NUM_PATTERNS = 6;
-constexpr int NUM_GAPS = 9;
+constexpr int NUM_PATTERNS = 5;
+constexpr int NUM_GAPS = 9;                 // Number of gaps actually used in the current application 
+constexpr int STRIDE_GAPS = 10;             // Fixed Modbus register spacing per pattern 
 
 // CPU1 pin numbers
 // ================

@@ -3,18 +3,18 @@
 #include "variables.h"
 
 // Shared globals
-float gapPattern0[NUM_GAPS] = {0};
-float gapPattern1[NUM_GAPS] = {0};
-float gapPattern2[NUM_GAPS] = {0};
-float gapPattern3[NUM_GAPS] = {0};
-float gapPattern4[NUM_GAPS] = {0};
-float gapPattern5[NUM_GAPS] = {0};
+float gapPattern0[STRIDE_GAPS] = {0};
+float gapPattern1[STRIDE_GAPS] = {0};
+float gapPattern2[STRIDE_GAPS] = {0};
+float gapPattern3[STRIDE_GAPS] = {0};
+float gapPattern4[STRIDE_GAPS] = {0};
+float gapPattern5[STRIDE_GAPS] = {0};
 
 volatile uint8_t i2cCommand = 0;
 
 PatternPacket transmitPacket; 
 PatternPacket receivePacket; 
-float gapArrays[NUM_PATTERNS][NUM_GAPS]; 
+float gapArrays[NUM_PATTERNS][STRIDE_GAPS]; 
 int stepperSpeed = 0;
 
 // Variables used for the IO signals

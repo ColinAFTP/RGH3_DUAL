@@ -9,5 +9,6 @@ void initCPU2HardIO();                  // Initialise the hardwired CPU1/CPU2 si
 void inputsCheck();
 void inputsStrip();
 void relayControl(word outputData);
+void feedbackCheck();
 
 #endif

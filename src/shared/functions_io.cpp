@@ -24,14 +24,14 @@ void initCPU1HardIO() {
 
 // Initialise the hardwired CPU1/CPU2 signals in CPU2
 void initCPU2HardIO() {
-  pinMode(OUTPUT_A1, INPUT);
-  pinMode(OUTPUT_A2, INPUT);
-  pinMode(OUTPUT_A3, INPUT);
-  pinMode(OUTPUT_A4, INPUT);
-  pinMode(INPUT_B1, OUTPUT);
-  pinMode(INPUT_B2, OUTPUT);
-  pinMode(INPUT_B3, OUTPUT);
-  pinMode(INPUT_B4, OUTPUT);
+  pinMode(INPUT_A1, INPUT);
+  pinMode(INPUT_A2, INPUT);
+  pinMode(INPUT_A3, INPUT);
+  pinMode(INPUT_A4, INPUT);
+  pinMode(OUTPUT_B1, OUTPUT);
+  pinMode(OUTPUT_B2, OUTPUT);
+  pinMode(OUTPUT_B3, OUTPUT);
+  pinMode(OUTPUT_B4, OUTPUT);
 };                  
 
 // Update the inputs
@@ -88,5 +88,32 @@ void relayControl(word outputData) {
   digitalWrite(RELAY_DATA_CLOCK_PIN, 0);
   // Latch new data to outputs
   digitalWrite(RELAY_DATA_LATCH_PIN, 1);
+}
+
+// Check for "at home" and "at target" feedback signals from CPU2
+void feedbackCheck() {
+  bool atHome = digitalRead(INPUT_B1);
+  bool atTarget = digitalRead(INPUT_B2);
+  
+  // Update the Modbus discrete status bits
+  modbusServer.discreteInputWrite(ADDR_HOME, atHome);
+  modbusServer.discreteInputWrite(ADDR_MOVE_DONE, atTarget);
+  
+  // Set relay 1 (bit 0) if at home
+  if (atHome) {
+    relayData |= 0x01;
+  } else {
+    relayData &= ~0x01;
+  }
+  
+  // Set relay 2 (bit 1) if at target
+  if (atTarget) {
+    relayData |= 0x02;
+  } else {
+    relayData &= ~0x02;
+  }
+  
+  // Write the updated relay data back to the holding register so the PLC can see it
+  modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayData);
 }
 

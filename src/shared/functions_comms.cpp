@@ -163,21 +163,32 @@ void speedCheck() {
 }
 
 void patternUpdateCheck() {
-  // This functions checks for pattern updates from the PLC
-  bool patternUpdateFlag = modbusServer.coilRead(ADDR_GAP_UPDATE);  
-  if ((patternUpdateFlag == true) ||(bootLoadGaps == true)) {
+  // This function checks for pattern updates from the PLC
+  // bool patternUpdateFlag = modbusServer.coilRead(ADDR_GAP_UPDATE);  
+  // if ((patternUpdateFlag == true) || (bootLoadGaps == true)) {
     Serial.println("Pattern update requested from PLC.");           
     // Clear the pattern update flag
     modbusServer.coilWrite(ADDR_GAP_UPDATE, 0);
-    // Update the pattern 0 gaps
-    Serial.println("Updating pattern 0 gaps.");
-    for (int c = 0; c < NUM_GAPS; c++) {
-      gapArrays[0][c] = modbusServer.holdingRegisterRead(ADDR_PATTERN_0_0 + c);
-      Serial.print("New pattern 0 gap #");
-      Serial.print(c + 1);
-      Serial.print(": ");
-      Serial.println(gapArrays[0][c]);
-    }
 
-  }
+    // Loop through all patterns
+    for (int p = 0; p < NUM_PATTERNS; p++) {
+        Serial.print("Updating pattern ");
+        Serial.print(p);
+        Serial.println(" gaps.");
+
+        int baseAddress = ADDR_PATTERN_0_0 + (p * STRIDE_GAPS);
+
+        // Loop through all gaps in the pattern's stride
+        for (int c = 0; c < STRIDE_GAPS; c++) {
+            gapArrays[p][c] = modbusServer.holdingRegisterRead(baseAddress + c);
+
+            Serial.print("P");
+            Serial.print(p);
+            Serial.print(" G");
+            Serial.print(c);
+            Serial.print(": ");
+            Serial.println(gapArrays[p][c]);
+        }
+    }
+  // }
 }

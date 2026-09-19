@@ -67,53 +67,56 @@ void setup()
 void loop()
 {
 
+  // Poll for Modbus TCP requests (server stays active even if client drops)
+  modbusServer.poll();
+
   if (!ethernetClient.connected()) {
     ethernetConnect();
   } else {
 
-    // Poll for Modbus TCP requests
-    modbusServer.poll();
-  
     // Check for new pattern gap data from the PLC
     if ((millis() - dataUpdateTime >= 5000) || bootLoadGaps) {  // Check every 5 s or on boot load
       patternUpdateCheck();
       dataUpdateTime = millis();
       bootLoadGaps = false;
     }
+  }
 
-    // Check for new pattern requests
-    patternCheck();
-    if (patternSelection != patternSelectionPrevious) {
+  // Check for new pattern requests
+  patternCheck();
+  if (patternSelection != patternSelectionPrevious) {
 
-      Serial.print("   | Current pattern: ");
-      Serial.println(patternSelection);
-      
-      // Start 500 ms pulse on the new move output pin
-      digitalWrite(OUTPUT_A1, HIGH);
-      pulseStartTime = millis();
-      pulseActive = true;
+    Serial.print("   | Current pattern: ");
+    Serial.println(patternSelection);
+    
+    // Start 500 ms pulse on the new move output pin
+    digitalWrite(OUTPUT_A1, HIGH);
+    pulseStartTime = millis();
+    pulseActive = true;
 
-      patternSelectionPrevious = patternSelection;
-    }
+    patternSelectionPrevious = patternSelection;
+  }
 
-    // Check for relay updates
-    relayCheck();
-    if (relayData != relayDataPrevious) {
-      Serial.print("   | New relay data: ");
-      Serial.println(relayData, BIN);
-      relayControl(relayData);
-      relayDataPrevious = relayData;
-    }
+  // Check for relay updates
+  relayCheck();
 
-    // Check for speed updates
-    speedCheck();
-    if (speedData != speedDataPrevious) {
-      Serial.print("   | New speed data: ");
-      Serial.println(speedData);
-      stepperSpeed = speedData;
-      speedDataPrevious = speedData;
-    }
+  // Check feedback signals (at home, at target) and update relay bits
+  feedbackCheck();
 
+  if (relayData != relayDataPrevious) {
+    Serial.print("   | New relay data: ");
+    Serial.println(relayData, BIN);
+    relayControl(relayData);
+    relayDataPrevious = relayData;
+  }
+
+  // Check for speed updates
+  speedCheck();
+  if (speedData != speedDataPrevious) {
+    Serial.print("   | New speed data: ");
+    Serial.println(speedData);
+    stepperSpeed = speedData;
+    speedDataPrevious = speedData;
   }
 
   // Check for new input updates every 25 ms

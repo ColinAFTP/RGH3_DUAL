@@ -19,9 +19,12 @@ Stepper stepper6(STEPPER6_PULSE_PIN, STEPPER6_DIR_PIN);
 Stepper stepper7(STEPPER7_PULSE_PIN, STEPPER7_DIR_PIN); 
 Stepper stepper8(STEPPER8_PULSE_PIN, STEPPER8_DIR_PIN); 
 Stepper stepper9(STEPPER9_PULSE_PIN, STEPPER9_DIR_PIN);
-Stepper steppers[NUM_GAPS] = {stepper1, stepper2, stepper3, stepper4, stepper5, stepper6, stepper7, stepper8, stepper9};
 
-StepperGroup g1{steppers[0], steppers[1], steppers[2], steppers[3], steppers[4], steppers[5], steppers[6], steppers[7], steppers[8]};
+// Use pointers to original objects to avoid copying
+Stepper* steppers[NUM_GAPS] = {&stepper1, &stepper2, &stepper3, &stepper4, &stepper5, &stepper6, &stepper7, &stepper8, &stepper9};
+
+// Initialise StepperGroup with the actual stepper objects
+StepperGroup g1{stepper1, stepper2, stepper3, stepper4, stepper5, stepper6, stepper7, stepper8, stepper9};
 
 
 // This subroutine checks if any of the motors are moving
@@ -29,7 +32,7 @@ bool motorsMoving() {
   bool returnState = false;
   // Check if any of the motors are moving
   for (int i = 0; i < NUM_GAPS; i++) {
-    returnState |= steppers[i].isMoving;
+    returnState |= steppers[i]->isMoving;
   }
   // Return the result
   return returnState;
@@ -38,7 +41,7 @@ bool motorsMoving() {
 // This subroutine calculates the target positions for each stepper motor based on the selected pattern.
 void stepTargetCalc(int patternChoice) {
 
-  bool debugPrinting = false;               // Set to true to enable debug printing of stepper target calculations
+  bool debugPrinting = true;               // Enabled for troubleshooting
   float tempStepperArray[NUM_GAPS];
 
   if (debugPrinting) {
@@ -68,10 +71,7 @@ void stepTargetCalc(int patternChoice) {
       Serial.println(" steps");
     }
   }
-  if (debugPrinting) {
-    Serial.print("Mid index: ");
-    Serial.println(mid);
-  }
+  
   // ----- RIGHT SIDE -----
   // For i = mid+1 to NUM_GAPS-1:
   // temp[i] = sum of gap[mid..i]
@@ -89,7 +89,6 @@ void stepTargetCalc(int patternChoice) {
       Serial.print(" mm => ");
       Serial.print(tempStepperArray[i]);
       Serial.println(" steps");
-      Serial.println();
     }
   }
 
@@ -109,13 +108,39 @@ void stepTargetCalc(int patternChoice) {
 
 void updateStepperPositions() {
   for (int i = 0; i < NUM_GAPS; i++) {
-    stepperPositions[i] = steppers[i].getPosition();
+    stepperPositions[i] = steppers[i]->getPosition();
   }
 }
 
 // This subroutine updates the speed of all stepper motors.
 void updateStepperSpeeds(int speed) {
+  // Guard against zero speed
+  if (speed <= 0) speed = INIT_SPEED;
+  
   for (int i = 0; i < NUM_GAPS; i++) {
-    steppers[i].setMaxSpeed(speed);
+    steppers[i]->setMaxSpeed(speed);
+  }
+}
+
+// This subroutine triggers the movement of the stepper motors.
+// It is a blocking function (g1.move()).
+void triggerMove(int patternChoice) {
+  // Clear the status outputs
+  digitalWrite(OUTPUT_B1, LOW);
+  digitalWrite(OUTPUT_B2, LOW);
+
+  // Set the new stepper targets
+  for (int i = 0; i < NUM_GAPS; i++) {
+    steppers[i]->setTargetAbs(stepperTargets[i]);
+  }
+
+  // Move the stepper group (blocking)
+  g1.move();
+
+  // Set the status outputs based on the pattern
+  if (patternChoice == 0) {
+    digitalWrite(OUTPUT_B1, HIGH);
+  } else {
+    digitalWrite(OUTPUT_B2, HIGH);
   }
 }
