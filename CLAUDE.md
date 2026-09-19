@@ -169,3 +169,28 @@ Belts-and-braces: the controller already refuses targets beyond the rack travel.
 - TeensyStep gotcha: only the LEAD stepper of a group owns a timer (`stpTimer` is uninitialised for the others). NEVER call `emergencyStop()` on a stepper that is not the lead of a running move, it crashes. `SpreaderGroup` (functions_steppers.cpp) exposes the lead safely.
 - Not a safety-rated function. If over travel protects people or the mechanics, also wire it to the PST8072 ENA inputs / motor supply so it works with the firmware down.
 - NOT yet bench tested. To test: wire switches to inputs 1 and 11 (default off), set `OVERTRAVEL_ENABLED` true, flash both CPUs, start a long slow move (for example pattern 1 with 20 mm gaps at speed 1500) and flip a switch mid-move: expect the motion to stop within ~5 ms, Fault (120) on, register 108 = 0x001 (left) or 0x200 (right), register 109 = 2, log "OVER TRAVEL FAULT". Then reset with coil 107 (switch off first, or the fault returns).
+
+## Pre-real-gripper review (end of session 2026-09-19): gaps found, not yet fixed
+
+Everything below was found by reviewing the whole code base; none of it is fixed yet unless marked. Order = suggested priority.
+
+**Fix before the first real run (functional/safety)**
+1. Pulse-stage runaway. The direct-pulse ISR keeps pulsing a stepper while its `runFlag` is set, and only the main loop clears it (from fresh I2C sensor reads). If the CPU2 main loop hangs during homing, pulses continue with no sensor checking. Fix: the ISR must stop pulses if the last successful sensor read is older than ~20 ms (a stale-data timeout in the ISR), and/or enable the Teensy hardware watchdog.
+2. No hardware watchdog on either CPU (Teensy 4.1 WDT). A hang leaves outputs (At Target, Fault lines) frozen and the PLC is never told.
+3. PLC is never told a request was REFUSED. `At Target` stays on from the previous move when a request is refused (targets out of range, positions unknown, fault active, busy, gap refresh failed): the PLC would think the gripper arrived. Fix: clear At Target on every new request (CPU1, when it pulses A1) and add a status bit "request refused / move error" (with a reason code), or raise a fault.
+4. PLC handshake is undocumented. At Target drops ~20-70 ms AFTER the pattern write, so the PLC must wait for At Target = 0 and then = 1 (or delay >=150 ms) or it will see the old high. Write this down for the PLC programmer. Also: pattern writes are ignored while CPU2 is busy or homing, and after power-up the PLC must wait for Home before selecting a pattern.
+5. CPU2 health is not visible to the PLC. If CPU2 stops (crash/I2C failure) the PLC only sees At Target stuck. CPU1 already knows (status packets stop for >1.5 s): expose it as a discrete input and treat it as a fault.
+6. First-run verification of direction and scaling (procedure, not code): TeensyStep positive = OPEN and homing = LOW dir pin = CLOSE are ASSUMED; STEPS_PER_MM is computed, not measured. Run the first tests at low speed, with the over travel protection enabled (or a hand on the E-stop), motors disconnected from the mechanics first if possible; measure real travel against the reported mm.
+7. Hardware note: stepper step/dir pins float while CPU2 resets or is being programmed, which can make the PST8072 move. Check for pull-downs, and consider driving the drives' ENA inputs from CPU2 (also gives a hardware stop for faults and over travel). Over travel via firmware is not a safety function.
+
+**Should do soon**
+8. I2C reliability at 1 MHz: 7 read failures in ~12 s were seen during homing. Check for external I2C pull-ups (pins 24/25), add a failure counter to the web page, measure with the page open/closed.
+9. Send the status/events during the direct-pulse stage too (one 0.5 ms write every 250 ms): today CPU2 events are batched until homing ends, so the log timeline is misleading.
+10. Modbus stale connection: only ONE Modbus client is served; an unclean disconnect (cable pulled) may leave the old socket "connected" until TCP times out and block the PLC from reconnecting. Test by pulling the cable; if it happens, accept the new client and drop the old one.
+11. Manual mode / jog is not implemented (coils 104-106, register 107, DIP switch, INPUT_A2/OUTPUT_A2 exist). It is very useful for commissioning and for recovering from a jam.
+12. Gap resolution is whole mm (16-bit registers). Decide whether 0.1 mm scaling is needed before the PLC program is written (changing it later changes the PLC).
+13. Stuck-on proximity sensor is not detected (spreader thinks it is home). Optional plausibility check: at a pattern with a gap of several mm the matching proxy must be OFF.
+14. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, coil 101 homing (left in place on purpose, revisit), input registers 101-110 unused. Relays 1 and 2 are overwritten by Home / At Target: the PLC must not use them.
+15. Power-up auto-home moves the motors without a PLC command (Colin's requirement). Make sure this is acceptable for the real machine (guarding, person nearby).
+
+**Still to tune / verify on the real gripper**: HOME_PULSE_RATE, HOME_START_RATE, HOME_RAMP_MS, HOME_APPROACH_MM, INIT_ACCEL, MAX_SPEED, PST8072 pulse width and direction setup (datasheet not found), INPUT_FILTER_SAMPLES for the real sensor cables, enable OVERTRAVEL_ENABLED once proxies 1 and 11 are wired. There are no automated tests: everything so far was bench-tested on the desk board with simulated proxies and no motors.
