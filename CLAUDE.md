@@ -46,20 +46,20 @@ Correctness
 - [x] `triggerMove` at-target/at-home logic. Now: B2 after every completed move; B1 only when all stepper positions are 0 (interim, until homing exists). BOTH signals go to the PLC and must be kept.
 - [x] `onI2CRequest` (ISR) copies `gapArrays` while the main loop may be writing it (torn packet).
 - [x] `initShiftRegisters` never sets `INPUTS_DATA_LOAD_PIN` to OUTPUT; `inputsCheck` blocks 2 ms per 25 ms with `delay(1)`.
-- [x] `INIT_ACCEL` applied, targets rounded. Still open: relay range check on a `word` is dead code.
+- [x] `INIT_ACCEL` applied, targets rounded, dead relay range check removed.
 
 Robustness / production
 - [x] `while(!Serial)` in both `setup()`s: firmware never starts without USB attached.
 - [x] Debug output (now `DEBUG_*` flags in constants.h, plotter runs in loop, no ISR printing) (`debugPrinting`, 50-line dump every 5 s, plotter output printed from an `IntervalTimer` ISR with a " mm" suffix that breaks the Serial Plotter).
 - [x] `triggerMove` now non-blocking (`startMove` + `moveService`). Triggers during a move are ignored (PLC must wait for At Target). Old blocking note: `g1.move()`; a trigger during a move is lost (500 ms pulse).
-- [ ] `ADDR_GAP_UPDATE` flag check commented out in `patternUpdateCheck`.
+- [x] `ADDR_GAP_UPDATE`: no longer needed (gaps reload every 5 s and on every pattern change); the coil is still cleared as an acknowledgement.
 
 Missing features
 - [x] Homing implemented per SPEC (2026-09-19). UNTESTED on hardware: build only. Tune HOME_* constants on the real gripper.
 - [ ] Manual mode (coils 104–106, register 107, DIP switch).
 
 Housekeeping
-- [ ] Delete unused `gapPattern0–5`, duplicate `feedbackCheck` declaration, move Ethernet globals out of shared `variables.cpp`, pin git `lib_deps` (local copies also in `lib/`), delete `GEMINI.txt`/`GEMINI.md`.
+- [x] Housekeeping done 2026-09-19: unused gap pattern arrays, `inputsStrip`, duplicate declarations, `constants.cpp`, `GEMINI.md`/`GEMINI.txt` and the duplicate `lib/TeensyStep4-main` removed; CPU1-only code no longer compiles into CPU2 (see File layout); git libraries pinned to tested commits in platformio.ini.
 - [ ] Gap resolution is whole mm (16-bit registers); decide whether 0.1 mm scaling is needed.
 - [x] Fix comment in `stepTargetCalc` right side ("gap[mid..i]" should read "gap[mid+1..i]").
 
@@ -116,3 +116,20 @@ This section supersedes any contradicting text above (notably "home is not patte
 - Fault path confirmed by Colin: proxy 2 left off while homing raises the homing fault (DI 120); the fault reset (coil 107 -> A3 -> CPU2) clears it and restarts the search home.
 - Not yet checked: register 108 value (expect 0x0001 for spreader 1), proxy switched ON mid-pulse stops the stepper instantly ("Homing complete"), cascade following behaviour with real spreaders, measured overtravel, PST8072 pulse timing.
 - `tools/modbus_home_test.js` runs the pattern 1 then home test, and `... reset` pulses the fault reset coil. Both print Home / At Target / Fault / register 108 changes with timestamps.
+
+## File layout (after the 2026-09-19 restructure)
+
+- `include/`: all headers. `constants.h` = every address, pin, layout, homing and I2C constant (documented). `variables.h` = variables both CPUs use. `variables_cpu1.h` = CPU1 only (Ethernet, Modbus, IO, relays).
+- `src/shared/variables.cpp`: the only shared source file.
+- `src/cpu1/`: `main.cpp`, `functions_comms.cpp` (Modbus/Ethernet), `functions_io_cpu1.cpp` (shift registers, relays, feedbackCheck), `functions_i2c_cpu1.cpp` (I2C slave), `variables_cpu1.cpp`.
+- `src/cpu2/`: `main.cpp`, `functions_steppers.cpp` (TeensyStep, targets), `functions_homing.cpp` (direct-pulse homing, faults), `functions_i2c_cpu2.cpp` (I2C master), `functions_io_cpu2.cpp`.
+- `tools/`: Node bench-test scripts (see Bench testing).
+- Library versions are pinned by commit in `platformio.ini` (`#sha` after the git URL). CPU1 needs FastShiftIn, ArduinoModbus, ArduinoRS485; CPU2 needs TeensyStep4 only.
+
+## PST8072 driver timing (2026-09-19)
+
+The PST8072 (PrimoPal Motor) datasheet could NOT be found online (primopal.com lists no manual for it). Ask the supplier or check the paper manual for: minimum step pulse width, direction setup/hold time, active edge, input voltage levels (Teensy outputs are 3.3 V). Our timings: TeensyStep pulse = 8 us (`setPulseParams(8, ...)` in the library), TeensyStep waits 5 us after the direction pin changes; direct-pulse homing pulse = `HOME_TICK_US` = 20 us with 10 us direction setup. These are above the 2.5 us / 5 us typical of drivers in this class, but unconfirmed for this driver.
+
+## Homing checks confirmed by Colin (2026-09-19)
+
+Register 108 reports the failed spreader (spreader 1 for proxy 2 left off). A proxy switched on 3 s into the pulse routine ends homing immediately ("Homing complete"). Fault reset via coil 107 works.

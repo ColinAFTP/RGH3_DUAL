@@ -4,7 +4,7 @@
 
 #include "constants.h"
 #include "functions_comms.h"
-#include "variables.h"
+#include "variables_cpu1.h"
 
 // Create the Modbus IP object
 byte mac1[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xE1 }; 
@@ -133,12 +133,8 @@ void patternCheck() {
 
 void relayCheck() {
   // Check for relay control updates from the PLC
+  // The register is 16 bits and so is relayData, so every value is valid
   relayData = modbusServer.holdingRegisterRead(ADDR_RELAYS);
-  if (relayData < 0 or relayData > 0xFFFF) {
-    relayData = relayDataPrevious;
-    Serial.println();
-    Serial.println("Error: Relay data is out of bounds!");
-    modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayDataPrevious);}
 }
 
 void updateTicker(word tickerData) {
@@ -162,11 +158,10 @@ void speedCheck() {
   }
 }
 
+// Reload all the gap patterns from the PLC's holding registers. This runs every 5 s, on start up and whenever the PLC
+// changes the pattern selection, so the update coil (ADDR_GAP_UPDATE) is no longer needed. It is still cleared here
+// so a PLC that sets it sees it acknowledged.
 void patternUpdateCheck() {
-  // This function checks for pattern updates from the PLC
-  // bool patternUpdateFlag = modbusServer.coilRead(ADDR_GAP_UPDATE);  
-  // if ((patternUpdateFlag == true) || (bootLoadGaps == true)) {
-    // Clear the pattern update flag
     modbusServer.coilWrite(ADDR_GAP_UPDATE, 0);
 
     // Read into a staging buffer first: the I2C request handler (interrupt) copies gapArrays,
@@ -189,5 +184,4 @@ void patternUpdateCheck() {
     noInterrupts();
     memcpy(gapArrays, staging, sizeof(gapArrays));
     interrupts();
-  // }
 }

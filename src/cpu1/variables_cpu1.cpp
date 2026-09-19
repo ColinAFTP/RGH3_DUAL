@@ -1,0 +1,22 @@
+#include <Arduino.h>
+
+#include "variables_cpu1.h"
+
+// Variables used for the IO signals
+FastShiftIn* FSI = nullptr;
+uint16_t inputData = 0;
+uint16_t inputDataPrevious = 0;
+
+// Variables used for comms
+EthernetServer ethernetServer(502);
+EthernetClient ethernetClient;
+ModbusTCPServer modbusServer;
+int patternSelection = 0;
+int patternSelectionPrevious = 0;
+word relayData = 0;
+word relayDataPrevious = 0;
+int speedData = 0;
+int speedDataPrevious = 0;
+uint32_t tickerTime = 0;
+uint16_t secondTicker = 0;
+bool bootLoadGaps = false;

@@ -5,7 +5,7 @@
 #include "functions_comms.h"
 #include "functions_i2c.h"
 #include "functions_io.h"
-#include "variables.h"
+#include "variables_cpu1.h"
 
 // Set up local variables
 static uint32_t inputUpdateTime;

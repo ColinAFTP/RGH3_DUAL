@@ -9,6 +9,5 @@ void updateTicker(word tickerData);     // This function updates the ticker valu
 void speedCheck();                      // This function checks for speed data updates from the PLC 
 void updateInputs();                    // This function updates the input data in the holding register
 void patternUpdateCheck();              // This functions checks for pattern updates from the PLC
-void feedbackCheck();                   // This function checks for feedback signals from CPU2
 
 #endif

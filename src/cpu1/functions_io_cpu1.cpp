@@ -1,6 +1,6 @@
 #include "constants.h"
 #include "functions_io.h"
-#include "variables.h"
+#include "variables_cpu1.h"
 
 // Initialise the shift registers after the pin modes have been set
 void initShiftRegisters() {
@@ -28,23 +28,6 @@ void initCPU1HardIO() {
   pinMode(INPUT_B4, INPUT_PULLDOWN);
 };
 
-// Initialise the hardwired CPU1/CPU2 signals in CPU2
-void initCPU2HardIO() {
-  // Pull-downs so a disconnected wire reads LOW instead of floating and giving false triggers
-  pinMode(INPUT_A1, INPUT_PULLDOWN);
-  pinMode(INPUT_A2, INPUT_PULLDOWN);
-  pinMode(INPUT_A3, INPUT_PULLDOWN);
-  pinMode(INPUT_A4, INPUT_PULLDOWN);
-  pinMode(OUTPUT_B1, OUTPUT);
-  pinMode(OUTPUT_B2, OUTPUT);
-  pinMode(OUTPUT_B3, OUTPUT);
-  pinMode(OUTPUT_B4, OUTPUT);
-  digitalWrite(OUTPUT_B1, LOW);
-  digitalWrite(OUTPUT_B2, LOW);
-  digitalWrite(OUTPUT_B3, LOW);
-  digitalWrite(OUTPUT_B4, LOW);
-};
-
 // Update the inputs
 void inputsCheck() {
   // Pulse the load pin to load the current inputs into the shift registers
@@ -56,13 +39,6 @@ void inputsCheck() {
   inputData = FSI->read16();
   // Invert the inputs because there are pull-up resistors
   inputData = ~inputData;
-}
-
-// Map the input data to an array of Boolean variables
-void inputsStrip() {
-  for (int i = 0; i < 16; i++) {
-    digitalInput[i] = (inputData >> i) & 0x01;
-  }
 }
 
 // This subroutine clocks data serially to the 74HC595 chips. There are 2 in series so that 16 relays can be controlled at the same time. 
