@@ -39,10 +39,16 @@ bool motorsMoving() {
 }
 
 // This subroutine calculates the target positions for each stepper motor based on the selected pattern.
-void stepTargetCalc(int patternChoice) {
+bool stepTargetCalc(int patternChoice) {
 
-  bool debugPrinting = true;               // Enabled for troubleshooting
+  bool debugPrinting = DEBUG_STEPPER_CALC;
   float tempStepperArray[NUM_GAPS];
+
+  if (patternChoice < 0 || patternChoice >= NUM_PATTERNS) {
+    Serial.print("Invalid pattern selection: ");
+    Serial.println(patternChoice);
+    return false;
+  }
 
   if (debugPrinting) {
     Serial.println();
@@ -74,7 +80,8 @@ void stepTargetCalc(int patternChoice) {
   
   // ----- RIGHT SIDE -----
   // For i = mid+1 to NUM_GAPS-1:
-  // temp[i] = sum of gap[mid..i]
+  // temp[i] = sum of gap[mid+1..i]
+  // (gap[mid] is the last left spreader to the static spreader, gap[mid+1] is the static spreader to the first right spreader)
   for (int i = mid + 1; i < NUM_GAPS; i++) {
     float sum = 0;
     for (int j = mid + 1; j <= i; j++) {
@@ -93,17 +100,21 @@ void stepTargetCalc(int patternChoice) {
   }
 
   // ----- LIMIT CHECK -----
-  if (tempStepperArray[0] <= MAX_STEPS && tempStepperArray[NUM_GAPS - 1] <= MAX_STEPS) {
-    for (int i = 0; i < NUM_GAPS; i++) {
-      stepperTargets[i] = tempStepperArray[i];
+  // Every target must lie within the rack travel
+  for (int i = 0; i < NUM_GAPS; i++) {
+    if (tempStepperArray[i] < 0 || tempStepperArray[i] > MAX_STEPS) {
+      Serial.print("Stepper target ");
+      Serial.print(i);
+      Serial.print(" out of bounds (");
+      Serial.print(tempStepperArray[i]);
+      Serial.println(" steps). Targets not loaded.");
+      return false;
     }
-  } else {
-    Serial.println("Stepper targets out of bounds! Targets not loaded.");
-    Serial.print("Target 0: ");
-    Serial.println(tempStepperArray[0]);
-    Serial.print("Target last: ");
-    Serial.println(tempStepperArray[NUM_GAPS - 1]);
   }
+  for (int i = 0; i < NUM_GAPS; i++) {
+    stepperTargets[i] = lroundf(tempStepperArray[i]);
+  }
+  return true;
 }
 
 void updateStepperPositions() {
@@ -119,13 +130,25 @@ void updateStepperSpeeds(int speed) {
   
   for (int i = 0; i < NUM_GAPS; i++) {
     steppers[i]->setMaxSpeed(speed);
+    steppers[i]->setAcceleration(INIT_ACCEL);
   }
 }
 
-// This subroutine triggers the movement of the stepper motors.
-// It is a blocking function (g1.move()).
-void triggerMove(int patternChoice) {
-  // Clear the status outputs
+static bool moving = false;
+
+bool moveInProgress() {
+  return moving;
+}
+
+// This subroutine starts the movement of the stepper motors. It does not block.
+// Returns false if a move is already running.
+bool triggerMove() {
+  if (moving) {
+    Serial.println("Move requested while already moving - ignored.");
+    return false;
+  }
+
+  // Clear the at-home and at-target outputs
   digitalWrite(OUTPUT_B1, LOW);
   digitalWrite(OUTPUT_B2, LOW);
 
@@ -134,13 +157,23 @@ void triggerMove(int patternChoice) {
     steppers[i]->setTargetAbs(stepperTargets[i]);
   }
 
-  // Move the stepper group (blocking)
-  g1.move();
+  g1.startMove();
+  moving = true;
+  return true;
+}
 
-  // Set the status outputs based on the pattern
-  if (patternChoice == 0) {
-    digitalWrite(OUTPUT_B1, HIGH);
-  } else {
+// Call every loop. When all steppers have stopped, signals at-target (OUTPUT_B2), and at-home
+// (OUTPUT_B1) if every stepper is at position 0. The homing routine, once written, must set
+// the positions to 0 and raise OUTPUT_B1 the same way.
+void moveService() {
+  if (moving && !motorsMoving()) {
+    moving = false;
+    updateStepperPositions();
+    bool atHome = true;
+    for (int i = 0; i < NUM_GAPS; i++) {
+      if (stepperPositions[i] != 0) atHome = false;
+    }
+    digitalWrite(OUTPUT_B1, atHome);
     digitalWrite(OUTPUT_B2, HIGH);
   }
 }

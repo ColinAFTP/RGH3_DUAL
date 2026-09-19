@@ -28,9 +28,8 @@ void setup()
   Wire2.setClock(1000000);
 
   Serial.begin(9600);                 // Start serial for output
-  while(!Serial)
-  {
-
+  // Wait for a USB host for up to 3 s only, so the controller still starts when running stand-alone
+  while (!Serial && millis() < 3000) {
   }
   
   // Clear the PuTTY terminal
@@ -88,7 +87,15 @@ void loop()
 
     Serial.print("   | Current pattern: ");
     Serial.println(patternSelection);
-    
+
+    // Refresh the gap data and speed from the PLC now, so CPU2 always moves with the latest values
+    patternUpdateCheck();
+    speedCheck();
+    if (speedData != speedDataPrevious) {
+      stepperSpeed = speedData;
+      speedDataPrevious = speedData;
+    }
+
     // Start 500 ms pulse on the new move output pin
     digitalWrite(OUTPUT_A1, HIGH);
     pulseStartTime = millis();

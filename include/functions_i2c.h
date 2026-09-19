@@ -6,6 +6,6 @@ void copyFromReceiveData();
 void onI2CRequest();
 int readIO();
 int readPattern();
-void readGapPatterns();
+bool readGapPatterns();                 // Returns false if the I2C transfer failed (old data kept)
 
 #endif

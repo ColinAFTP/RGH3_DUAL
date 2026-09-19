@@ -68,7 +68,7 @@ int readIO() {
 
 // Function that requests pattern gap data from the slave (CPU1). 
 // This function is called from CPU2.
-void readGapPatterns() {
+bool readGapPatterns() {
     Wire2.beginTransmission(0x40);
     Wire2.write(2);
     Wire2.endTransmission();
@@ -80,9 +80,10 @@ void readGapPatterns() {
     if (Wire2.requestFrom(0x40, sizeof(receivePacket))) {
         Wire2.readBytes((byte*)&receivePacket, sizeof(receivePacket));
         copyFromReceiveData();
-    } else {
-        Serial.println("Gap pattern read over I2C failed");
+        return true;
     }
+    Serial.println("Gap pattern read over I2C failed");
+    return false;
 }
 
 // Function that requests pattern selection number from the slave (CPU1). 

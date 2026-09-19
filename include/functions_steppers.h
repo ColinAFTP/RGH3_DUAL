@@ -2,9 +2,11 @@
 #define FUNCTIONS_STEPPERS_H
 
 bool motorsMoving();
-void stepTargetCalc(int patternChoice);
+bool stepTargetCalc(int patternChoice); // Returns false (targets untouched) if the pattern or any target is invalid
 void updateStepperPositions();
 void updateStepperSpeeds(int speed);
-void triggerMove(int patternChoice);
+bool triggerMove();                     // Start a non-blocking move to stepperTargets. Returns false if already moving
+void moveService();                     // Call every loop: detects move completion and sets the at-target output
+bool moveInProgress();
 
 #endif

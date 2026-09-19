@@ -80,6 +80,9 @@ const int ADDR_MOVE_DONE = 118;         // Gripper spreaders finished moving
 const int ADDR_MANUAL_MODE = 119;       // Gripper is in manual mode
 
 // General constants
+constexpr bool DEBUG_STEPPER_CALC = false;  // Print stepper target calculations
+constexpr bool DEBUG_PLOT = false;          // Print stepper positions in Serial Plotter format (CPU2)
+constexpr bool DEBUG_GAP_UPDATE = false;    // Print every gap value read from the PLC (CPU1)
 const int DEBOUNCE_DELAY = 20;          // 20 ms debounce delay for inputs
 
 // Stepper movement control constants

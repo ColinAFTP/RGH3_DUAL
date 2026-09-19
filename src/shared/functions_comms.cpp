@@ -166,29 +166,28 @@ void patternUpdateCheck() {
   // This function checks for pattern updates from the PLC
   // bool patternUpdateFlag = modbusServer.coilRead(ADDR_GAP_UPDATE);  
   // if ((patternUpdateFlag == true) || (bootLoadGaps == true)) {
-    Serial.println("Pattern update requested from PLC.");           
     // Clear the pattern update flag
     modbusServer.coilWrite(ADDR_GAP_UPDATE, 0);
 
-    // Loop through all patterns
+    // Read into a staging buffer first: the I2C request handler (interrupt) copies gapArrays,
+    // so gapArrays must only ever be changed in one quick block.
+    static float staging[NUM_PATTERNS][STRIDE_GAPS];
     for (int p = 0; p < NUM_PATTERNS; p++) {
-        Serial.print("Updating pattern ");
-        Serial.print(p);
-        Serial.println(" gaps.");
-
         int baseAddress = ADDR_PATTERN_0_0 + (p * STRIDE_GAPS);
-
-        // Loop through all gaps in the pattern's stride
         for (int c = 0; c < STRIDE_GAPS; c++) {
-            gapArrays[p][c] = modbusServer.holdingRegisterRead(baseAddress + c);
-
-            Serial.print("P");
-            Serial.print(p);
-            Serial.print(" G");
-            Serial.print(c);
-            Serial.print(": ");
-            Serial.println(gapArrays[p][c]);
+            staging[p][c] = modbusServer.holdingRegisterRead(baseAddress + c);
+            if (DEBUG_GAP_UPDATE) {
+                Serial.print("P");
+                Serial.print(p);
+                Serial.print(" G");
+                Serial.print(c);
+                Serial.print(": ");
+                Serial.println(staging[p][c]);
+            }
         }
     }
+    noInterrupts();
+    memcpy(gapArrays, staging, sizeof(gapArrays));
+    interrupts();
   // }
 }

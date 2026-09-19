@@ -6,6 +6,7 @@
 void initShiftRegisters() {
   pinMode(INPUTS_DATA_PIN, INPUT);
   pinMode(INPUTS_DATA_CLOCK_PIN, OUTPUT);
+  pinMode(INPUTS_DATA_LOAD_PIN, OUTPUT);
   // Now that pins are configured, construct the object
   FSI = new FastShiftIn(INPUTS_DATA_PIN, INPUTS_DATA_CLOCK_PIN, MSBFIRST);
 }
@@ -38,9 +39,9 @@ void initCPU2HardIO() {
 void inputsCheck() {
   // Pulse the load pin to load the current inputs into the shift registers
   digitalWrite(INPUTS_DATA_LOAD_PIN, LOW);
-  delay(1);
+  delayMicroseconds(5);
   digitalWrite(INPUTS_DATA_LOAD_PIN, HIGH);
-  delay(1);
+  delayMicroseconds(5);
   // Load the bits from the shift registers using the FastShiftIn library
   inputData = FSI->read16();
   // Invert the inputs because there are pull-up resistors

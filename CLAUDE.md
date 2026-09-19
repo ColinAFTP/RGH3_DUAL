@@ -40,18 +40,18 @@ Dual Teensy 4.1 controller for a gripper spreader. A PLC commands gap patterns o
 Status key: [ ] open, [x] done. Update as work lands.
 
 Correctness
-- [ ] CPU2 uses stale gaps/speed at move time (CPU1 refreshes every 5 s, CPU2 every 10 s). Fix: CPU1 refreshes on pattern change; CPU2 re-reads gaps right after the A1 trigger.
-- [ ] `readPattern()` returns -1 on I2C failure and `stepTargetCalc(-1)` indexes `gapArrays[-1]`.
-- [ ] `stepTargetCalc` failure is silent: `triggerMove` still moves to stale targets. Limit check ignores negative values and middle steppers.
-- [ ] `triggerMove` never sets "at target" for pattern 0 and wrongly treats pattern 0 as home.
-- [ ] `onI2CRequest` (ISR) copies `gapArrays` while the main loop may be writing it (torn packet).
-- [ ] `initShiftRegisters` never sets `INPUTS_DATA_LOAD_PIN` to OUTPUT; `inputsCheck` blocks 2 ms per 25 ms with `delay(1)`.
-- [ ] `INIT_ACCEL` never applied; targets truncated not rounded; relay range check on a `word` is dead code.
+- [x] CPU2 uses stale gaps/speed at move time (CPU1 refreshes every 5 s, CPU2 every 10 s). Fix: CPU1 refreshes on pattern change; CPU2 re-reads gaps right after the A1 trigger.
+- [x] `readPattern()` returns -1 on I2C failure and `stepTargetCalc(-1)` indexes `gapArrays[-1]`.
+- [x] `stepTargetCalc` failure is silent: `triggerMove` still moves to stale targets. Limit check ignores negative values and middle steppers.
+- [x] `triggerMove` at-target/at-home logic. Now: B2 after every completed move; B1 only when all stepper positions are 0 (interim, until homing exists). BOTH signals go to the PLC and must be kept.
+- [x] `onI2CRequest` (ISR) copies `gapArrays` while the main loop may be writing it (torn packet).
+- [x] `initShiftRegisters` never sets `INPUTS_DATA_LOAD_PIN` to OUTPUT; `inputsCheck` blocks 2 ms per 25 ms with `delay(1)`.
+- [x] `INIT_ACCEL` applied, targets rounded. Still open:  relay range check on a `word` is dead code.
 
 Robustness / production
-- [ ] `while(!Serial)` in both `setup()`s: firmware never starts without USB attached.
-- [ ] Debug output always on (`debugPrinting`, 50-line dump every 5 s, plotter output printed from an `IntervalTimer` ISR with a " mm" suffix that breaks the Serial Plotter).
-- [ ] `triggerMove` uses blocking `g1.move()`; a trigger during a move is lost (500 ms pulse).
+- [x] `while(!Serial)` in both `setup()`s: firmware never starts without USB attached.
+- [x] Debug output (now `DEBUG_*` flags in constants.h, plotter runs in loop, no ISR printing) (`debugPrinting`, 50-line dump every 5 s, plotter output printed from an `IntervalTimer` ISR with a " mm" suffix that breaks the Serial Plotter).
+- [x] `triggerMove` now non-blocking (`startMove` + `moveService`). Triggers during a move are ignored (PLC must wait for At Target). Old blocking note: `g1.move()`; a trigger during a move is lost (500 ms pulse).
 - [ ] `ADDR_GAP_UPDATE` flag check commented out in `patternUpdateCheck`.
 
 Missing features
@@ -62,3 +62,7 @@ Housekeeping
 - [ ] Delete unused `gapPattern0–5`, duplicate `feedbackCheck` declaration, move Ethernet globals out of shared `variables.cpp`, pin git `lib_deps` (local copies also in `lib/`), delete `GEMINI.txt`/`GEMINI.md`.
 - [ ] Gap resolution is whole mm (16-bit registers); decide whether 0.1 mm scaling is needed.
 - [ ] Fix comment in `stepTargetCalc` right side ("gap[mid..i]" should read "gap[mid+1..i]").
+
+## Session log
+
+- 2026-09-19: Review, checkpoint commit 12cc709, then correctness/robustness fixes (uncommitted until confirmed): stale-data fix (CPU1 refreshes on pattern change, CPU2 re-reads on trigger), target validation, non-blocking moves, at-home/at-target signals, staged gap copy, timed serial wait, debug flags. Builds clean; NOT yet bench-tested. Next: bench test on desk board, then homing (proximity sensors via I2C cmd 1 `readIO`), then manual mode (DIP switch), then housekeeping.
