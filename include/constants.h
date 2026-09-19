@@ -114,6 +114,10 @@ static_assert(NUM_LEFT_SPREADERS + NUM_RIGHT_SPREADERS == NUM_GAPS, "Spreader la
 // Set to 1 for no filtering.
 constexpr int INPUT_FILTER_SAMPLES = 3;
 
+// Inputs whose changes are written to the web event log and counted as glitches. Proxy 1 and 11 (the over travel sensors, input bits 0 and 10)
+// are left out while they are not wired: floating inputs pick up noise all the time. Use 0x07FF when they are connected.
+constexpr uint16_t INPUT_LOG_MASK = 0x03FE;           // Input bits 1 to 9 = proxy 2 to 10, the nine home sensors
+
 // Home proximity sensors. They are wired to the CPU1 input shift registers (input bit = proxy number - 1).
 // Proxy 1 (bit 0) and proxy 11 (bit 10) are the left and right over travel sensors and are not used at the moment.
 // Proxy 2 to 5 are the home sensors of spreaders 1 to 4 and proxy 6 to 10 those of spreaders 6 to 10, so the sensor of stepper index i is on input bit PROXY_FIRST_BIT + i.

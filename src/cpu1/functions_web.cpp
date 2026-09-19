@@ -352,14 +352,14 @@ void webService() {
   }
 }
 
-// Log every change on the proxy inputs (proxy 1 to 11, input bits 0 to 10). A change that reverses within 5 ms is a glitch:
+// Log every change on the watched proxy inputs (INPUT_LOG_MASK). A change that reverses within 5 ms is a glitch:
 // the log then says which sensor blipped and for how long. Call once per input sample.
 namespace {
 uint32_t inputGlitchCount = 0;
 }
 
 void logInputChanges() {
-  constexpr uint16_t WATCH = 0x07FF;                    // Input bits 0 to 10 = proxy 1 to 11
+  constexpr uint16_t WATCH = INPUT_LOG_MASK;            // Which inputs are logged (see constants.h)
   static bool started = false;
   static uint16_t last = 0;
   static uint16_t lastChanged = 0;
