@@ -133,3 +133,19 @@ The PST8072 (PrimoPal Motor) datasheet could NOT be found online (primopal.com l
 ## Homing checks confirmed by Colin (2026-09-19)
 
 Register 108 reports the failed spreader (spreader 1 for proxy 2 left off). A proxy switched on 3 s into the pulse routine ends homing immediately ("Homing complete"). Fault reset via coil 107 works.
+
+## Diagnostics web server (2026-09-19, read only)
+
+- Open `http://192.168.2.51/` (the IP follows the DIP switches). CPU1 serves it on port 80: `/` (page in `include/web_page.h`), `/status.json`, `/gaps.json`, `/log.json?since=N`. Code: `src/cpu1/functions_web.cpp`, `include/functions_web.h`.
+- Shows Home / At Target / Fault, CPU2 state, spreader table (home sensor, live position mm, fault), 16 inputs, 16 relays, gap patterns (active one highlighted), event log, PLC link, CPU1 loop time (avg/max).
+- CPU2 -> CPU1: `StatusPacket` (structures.h) via I2C command 5 every `STATUS_PERIOD_MS` (250 ms), NOT sent during the direct-pulse homing stage (`homingStage()==2`). It carries state, positions (tenths of mm), fault mask and up to 6 queued events (`statusEvent(EVT_*, arg)` in `src/cpu2/functions_status.cpp`). CPU1 turns events into text in `logCpu2Event()`. To add an event: add an `EVT_` code in constants.h, call `statusEvent()` on CPU2, add a case in `logCpu2Event()`.
+- CPU1's own events use `logEvent("fmt", ...)` (main loop only, never in an interrupt). 48-entry ring buffer.
+- IMPORTANT library findings (NativeEthernet): `EthernetServer::available()` busy-waits up to 10 s for a new client's first bytes, which froze the CPU1 loop 20-40 ms per web request and could freeze it for a client that sends nothing. Use `accept()` (now used for both the web server and the Modbus connection). `EthernetClient::flush()` also blocks (up to ~70 ms): do not call it. After the fix the worst CPU1 loop pass under heavy web load is ~100 us. The loop time is on the web page: watch it after any change.
+- The server handles one connection at a time (a silent client can hold the slot up to 1.5 s).
+- Bench results: 150+ rapid and parallel requests all answered completely; live positions match the layout (pattern 1 with 20 mm gaps: S1 80, S4 20, S6 20, S10 100 mm).
+- Observation to watch: the event log showed three "Home OFF / Home ON" pairs 1 ms apart with no one touching the proxy switches (around CPU2 boot and while serial ports were being opened). If it recurs on a quiet system, add a 2-3 sample glitch filter on CPU1's input sampling (costs 2-3 ms of latency).
+
+## Flashing pitfalls (learned the hard way, 2026-09-19)
+
+- `pio run -e <env> -t upload` uses whatever board is in the bootloader; with both boards on USB it can flash the wrong one, and a stale `teensy.exe`/`teensy_reboot.exe` can make it reuse an old image (the CPU2 board once ended up with CPU1 firmware). ALWAYS: unplug the other board's USB, press the program button, then confirm from the serial banner ("CPU 1 online" / "CPU 2 online") which firmware is running.
+- Unkillable zombie `teensy_reboot.exe` entries in tasklist are harmless.
