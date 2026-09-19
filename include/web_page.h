@@ -12,8 +12,10 @@ static const char WEB_PAGE[] = R"HTML(<!DOCTYPE html>
 @media(prefers-color-scheme:dark){:root{--bg:#12161d;--card:#1b212b;--fg:#e6e9ef;--mut:#96a0b2;--line:#2c3441;--off:#3a4352}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif}
 header{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
-h1{font-size:17px;margin:0 8px 0 0}h2{font-size:13px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px;padding:12px 16px}
+h1{font-size:17px;margin:0 8px 0 0}h2{font-size:14px;margin:0 0 8px;color:var(--mut);font-weight:600}
+main{display:grid;grid-template-columns:1fr;gap:12px;padding:12px 16px}
+@media(min-width:760px){main{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1300px){main{grid-template-columns:repeat(4,1fr)}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
 .wide{grid-column:1/-1}
 .chip{display:inline-block;padding:3px 10px;border-radius:12px;background:var(--off);color:#fff;font-weight:600;font-size:12px}
@@ -30,21 +32,21 @@ tr.act td{background:rgba(26,156,75,.13)}
 <div id="off" hidden>No answer from the controller</div>
 <header><h1>Gripper Controller</h1>
 <span>Up <b id="up">-</b></span><span>PLC <span class="chip" id="plc">-</span></span><span>CPU2 <span class="chip" id="c2">-</span></span>
-<span class="mut">CPU1 loop <b id="loop">-</b></span></header>
+<span class="mut">CPU1 Loop <b id="loop">-</b></span></header>
 <main>
 <section class="card"><h2>Status</h2>
-<p><span class="chip" id="home">HOME</span> <span class="chip" id="target">AT TARGET</span> <span class="chip" id="fault">FAULT</span></p>
-<table><tr><td>CPU2 state</td><td id="state">-</td></tr><tr><td>PLC pattern</td><td id="pat">-</td></tr><tr><td>PLC speed</td><td id="spd">-</td></tr>
-<tr><td>Failed spreaders (reg 108)</td><td id="mask">-</td></tr></table></section>
-<section class="card"><h2>Spreaders</h2><table id="sp"><tr><th>Spreader</th><th>Home sensor</th><th>Position mm</th><th>Fault</th></tr></table></section>
-<section class="card"><h2>Inputs (proxies)</h2><div class="bits" id="in"></div></section>
+<p><span class="chip" id="home">Home</span> <span class="chip" id="target">At Target</span> <span class="chip" id="fault">Fault</span></p>
+<table><tr><td>CPU2 State</td><td id="state">-</td></tr><tr><td>PLC Pattern</td><td id="pat">-</td></tr><tr><td>PLC Speed</td><td id="spd">-</td></tr><tr><td>Ticker</td><td id="ticker">-</td></tr>
+<tr><td>Failed Spreaders (Reg 108)</td><td id="mask">-</td></tr></table></section>
+<section class="card"><h2>Spreaders</h2><table id="sp"><tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr></table></section>
+<section class="card"><h2>Inputs (Proxies)</h2><div class="bits" id="in"></div></section>
 <section class="card"><h2>Relays</h2><div class="bits" id="rl"></div></section>
-<section class="card wide"><h2>Gap patterns (mm, spreader 1 to 10 left to right)</h2><table id="gp"></table></section>
-<section class="card wide"><h2>Event log</h2><div id="log"></div></section>
+<section class="card wide"><h2>Gap Patterns (mm, Spreader 1 to 10 Left to Right)</h2><table id="gp"></table></section>
+<section class="card wide"><h2>Event Log</h2><div id="log"></div></section>
 </main>
 <script>
-const $=id=>document.getElementById(id),SP=[1,2,3,4,6,7,8,9,10],STATE=['Idle','Moving','Homing: approach','Homing: pulses','FAULT','Idle, positions unknown'];
-const inLbl=['P1 OT L','P2 S1','P3 S2','P4 S3','P5 S4','P6 S6','P7 S7','P8 S8','P9 S9','P10 S10','P11 OT R','in11','in12','in13','in14','in15'];
+const $=id=>document.getElementById(id),SP=[1,2,3,4,6,7,8,9,10],STATE=['Idle','Moving','Homing: Approach','Homing: Pulses','Fault','Idle, Positions Unknown'];
+const inLbl=['P1 OT L','P2 S1','P3 S2','P4 S3','P5 S4','P6 S6','P7 S7','P8 S8','P9 S9','P10 S10','P11 OT R','In11','In12','In13','In14','In15'];
 const rlLbl=['R1 Home','R2 Target','R3','R4','R5','R6','R7','R8','R9','R10','R11','R12','R13','R14','R15','R16'];
 const chip=(id,on,cls)=>{$(id).className='chip'+(on?' '+(cls||'on'):'')};
 const led=(on,cls)=>'<span class="led'+(on?' '+(cls||'on'):'')+'"></span>';
@@ -55,14 +57,14 @@ function render(s){
  $('plc').textContent=s.plc?'connected':'no client';chip('plc',s.plc);
  const c=s.cpu2;$('c2').textContent=c.ok?'online':'no data';chip('c2',c.ok,c.ok?'on':'bad');
  chip('home',s.home);chip('target',s.target);chip('fault',s.fault,'bad');
- $('state').textContent=c.ok?STATE[c.state]||c.state:'-';$('pat').textContent=s.pattern+(s.pattern?'':' (home)');$('spd').textContent=s.speed;
+ $('state').textContent=c.ok?STATE[c.state]||c.state:'-';$('pat').textContent=s.pattern+(s.pattern?'':' (home)');$('spd').textContent=s.speed;$('ticker').textContent=s.tick;
  $('mask').textContent='0x'+s.mask.toString(16).toUpperCase();
- let h='<tr><th>Spreader</th><th>Home sensor</th><th>Position mm</th><th>Fault</th></tr>';
+ let h='<tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr>';
  SP.forEach((n,i)=>{h+='<tr><td>S'+n+'</td><td>'+led(s.inputs>>(i+1)&1)+'</td><td>'+(c.ok?(c.pos[i]/10).toFixed(1):'-')+'</td><td>'+led(s.mask>>(n-1)&1,'bad')+'</td></tr>'});
  $('sp').innerHTML=h;bits($('in'),s.inputs,inLbl);bits($('rl'),s.relays,rlLbl);window.act=s.pattern}
 async function getj(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json()}
 async function tick(){try{render(await getj('/status.json'));$('off').hidden=true}catch(e){$('off').hidden=false}setTimeout(tick,500)}
-async function gaps(){try{const g=await getj('/gaps.json');let h='<tr><th>Pattern</th>';for(let i=0;i<9;i++)h+='<th>gap '+(i+1)+'</th>';h+='</tr>';
+async function gaps(){try{const g=await getj('/gaps.json');let h='<tr><th>Pattern</th>';for(let i=0;i<9;i++)h+='<th>Gap '+(i+1)+'</th>';h+='</tr>';
  g.gaps.forEach((r,p)=>{h+='<tr'+(window.act==p+1?' class="act"':'')+'><td>'+(p+1)+'</td>'+r.map(v=>'<td>'+(v/10).toFixed(1)+'</td>').join('')+'</tr>'});$('gp').innerHTML=h}catch(e){}setTimeout(gaps,3000)}
 let last=0;
 async function log(){try{const j=await getj('/log.json?since='+last),L=$('log');

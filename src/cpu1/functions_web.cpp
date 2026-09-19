@@ -81,10 +81,10 @@ void buildStatus() {
   uint32_t now = millis();
   bool cpu2Ok = cpu2StatusMs != 0 && (now - cpu2StatusMs) < 1500;
   jp("{\"up\":%lu,\"loopMax\":%lu,\"loopAvg\":%lu,\"plc\":%d,\"home\":%d,\"target\":%d,\"fault\":%d,\"mask\":%u,"
-     "\"pattern\":%d,\"speed\":%d,\"inputs\":%u,\"relays\":%u,",
+     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"inputs\":%u,\"relays\":%u,",
      (unsigned long)now, (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
      ethernetClient.connected() ? 1 : 0, statusHome ? 1 : 0, statusAtTarget ? 1 : 0, statusFault ? 1 : 0,
-     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)inputData, (unsigned)relayData);
+     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned)inputData, (unsigned)relayData);
   jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"pos\":[",
      cpu2Ok ? 1 : 0, (unsigned long)cpu2RxCount, (unsigned)cpu2Status.state, (unsigned)(cpu2Status.flags & 1),
      (unsigned)cpu2Status.faultMask);
