@@ -3,6 +3,7 @@
 #include <i2c_driver_wire.h>
 #include <teensystep4.h>
 
+#include "functions_homing.h"
 #include "functions_i2c.h"
 #include "functions_steppers.h"
 #include "functions_io.h"
@@ -14,15 +15,17 @@ using namespace TS4;
 int led = LED_BUILTIN;
 uint32_t dataUpdateTime;
 uint32_t plotTime;
-static bool lastInputA1State = false;                      // Remember previous input state
+static bool lastInputA1State = false;                      // Remember previous start move input state
+static bool lastInputA3State = false;                      // Remember previous fault reset input state
 
-// Print the stepper positions in Serial Plotter format (values must be plain numbers)
+// Print the stepper positions in Serial Plotter format (values must be plain numbers).
+// The traces are named after the spreader numbers 1 to 4 and 6 to 10 (spreader 5 is static).
 static void plotPositions() {
   updateStepperPositions();
   Serial.print(">");
   for (int i = 0; i < NUM_GAPS; i++) {
     Serial.print("S");
-    Serial.print(i + 1);
+    Serial.print(i < NUM_LEFT_SPREADERS ? i + 1 : i + 2);
     Serial.print(":");
     Serial.print(stepperPositions[i] / STEPS_PER_MM);
     if (i < NUM_GAPS - 1) {
@@ -64,16 +67,27 @@ void setup()
   dataUpdateTime = millis() - 10000;
   plotTime = millis();
 
+  // Home automatically if not all the home sensors are on
+  homingStartup();
+
 }
 
 void loop()
 {
 
-  // Detect the end of a move and set the at-home / at-target outputs
-  moveService();
+  // Detect the end of a TeensyStep move, and run the homing routine
+  bool moveFinished = moveService();
+  homingService(moveFinished);
+
+  // A finished pattern move (or a TeensyStep only home) means at target. While homing, the next stage continues instead.
+  if (moveFinished && !homingActive()) {
+    digitalWrite(OUTPUT_B2, HIGH);
+  }
+
+  bool busy = moveInProgress() || homingActive();
 
   // If the stepper motors are standing still, do housekeeping
-  if (!moveInProgress()) {
+  if (!busy) {
 
     // If more than 10 seconds have elapsed since the last pattern update, then initiate data request from CPU1
     if (millis() - dataUpdateTime > 10000) {
@@ -82,30 +96,49 @@ void loop()
     }
   }
 
-  // Check for new pattern movement requests
+  // Fault reset request from CPU1 (rising edge on input A3)
+  bool currentInputA3State = digitalRead(INPUT_A3);
+  if (currentInputA3State && !lastInputA3State) {
+    if (busy) {
+      Serial.println("Fault reset requested while busy - ignored.");
+    } else {
+      faultReset();
+    }
+  }
+  lastInputA3State = currentInputA3State;
+
+  // Check for new pattern movement requests (rising edge on input A1)
   bool currentInputA1State = digitalRead(INPUT_A1);
   if (currentInputA1State && !lastInputA1State) {
     Serial.println("Trigger signal (INPUT_A1) detected!");
-    if (moveInProgress()) {
+    if (busy) {
       // Do nothing else: reading data or changing speeds here would disturb the running move
       Serial.println("Move requested while already moving - ignored.");
-      lastInputA1State = currentInputA1State;
-      return;
-    }
-    int pattern = readPattern();
-    Serial.print("   | Current pattern: ");
-    Serial.println(pattern);
-
-    // Refresh the gap data and speed straight away so the move never uses stale values
-    if (pattern < 0 || pattern >= NUM_PATTERNS) {
-      Serial.println("Move aborted: invalid pattern received from CPU1.");
-    } else if (!readGapPatterns()) {
-      Serial.println("Move aborted: could not refresh gap data from CPU1.");
-    } else if (stepTargetCalc(pattern)) {
-      updateStepperSpeeds(stepperSpeed);
-      triggerMove();
+    } else if (faultActive()) {
+      Serial.println("Move refused: homing fault is active.");
     } else {
-      Serial.println("Move aborted: targets not valid.");
+      int pattern = readPattern();
+      Serial.print("   | Current pattern: ");
+      Serial.println(pattern);
+
+      // Refresh the gap data and speed straight away so the move never uses stale values
+      if (pattern < 0 || pattern > NUM_PATTERNS) {
+        Serial.println("Move aborted: invalid pattern received from CPU1.");
+      } else if (!readGapPatterns()) {
+        Serial.println("Move aborted: could not refresh gap data from CPU1.");
+      } else if (pattern == 0) {
+        // Pattern 0 is home
+        if (!homeRequest()) {
+          Serial.println("Home request failed.");
+        }
+      } else if (!positionsKnown()) {
+        Serial.println("Move refused: gripper is not homed.");
+      } else if (stepTargetCalc(pattern)) {
+        updateStepperSpeeds(stepperSpeed);
+        triggerMove();
+      } else {
+        Serial.println("Move aborted: targets not valid.");
+      }
     }
   }
 

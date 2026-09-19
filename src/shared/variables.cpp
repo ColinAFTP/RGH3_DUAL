@@ -11,6 +11,8 @@ float gapPattern4[STRIDE_GAPS] = {0};
 float gapPattern5[STRIDE_GAPS] = {0};
 
 volatile uint8_t i2cCommand = 0;
+volatile uint16_t faultMaskRx = 0;
+volatile bool faultMaskNew = false;
 
 PatternPacket transmitPacket; 
 PatternPacket receivePacket; 

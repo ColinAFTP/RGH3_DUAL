@@ -17,11 +17,16 @@ void initCPU1HardIO() {
   pinMode(OUTPUT_A2, OUTPUT);
   pinMode(OUTPUT_A3, OUTPUT);
   pinMode(OUTPUT_A4, OUTPUT);
-  pinMode(INPUT_B1, INPUT);
-  pinMode(INPUT_B2, INPUT);
-  pinMode(INPUT_B3, INPUT);
-  pinMode(INPUT_B4, INPUT);
-};                  
+  digitalWrite(OUTPUT_A1, LOW);
+  digitalWrite(OUTPUT_A2, LOW);
+  digitalWrite(OUTPUT_A3, LOW);
+  digitalWrite(OUTPUT_A4, LOW);
+  // Pull-downs so a disconnected wire reads LOW instead of floating
+  pinMode(INPUT_B1, INPUT_PULLDOWN);
+  pinMode(INPUT_B2, INPUT_PULLDOWN);
+  pinMode(INPUT_B3, INPUT_PULLDOWN);
+  pinMode(INPUT_B4, INPUT_PULLDOWN);
+};
 
 // Initialise the hardwired CPU1/CPU2 signals in CPU2
 void initCPU2HardIO() {
@@ -34,7 +39,11 @@ void initCPU2HardIO() {
   pinMode(OUTPUT_B2, OUTPUT);
   pinMode(OUTPUT_B3, OUTPUT);
   pinMode(OUTPUT_B4, OUTPUT);
-};                  
+  digitalWrite(OUTPUT_B1, LOW);
+  digitalWrite(OUTPUT_B2, LOW);
+  digitalWrite(OUTPUT_B3, LOW);
+  digitalWrite(OUTPUT_B4, LOW);
+};
 
 // Update the inputs
 void inputsCheck() {
@@ -92,30 +101,36 @@ void relayControl(word outputData) {
   digitalWrite(RELAY_DATA_LATCH_PIN, 1);
 }
 
-// Check for "at home" and "at target" feedback signals from CPU2
+// Update the Home, At Target and Homing Fault status bits, and the two feedback relays.
+// Home is calculated here from the home proximity sensors: all nine on and no fault.
+// At Target and the fault come from CPU2 on the hardwired lines.
 void feedbackCheck() {
-  bool atHome = digitalRead(INPUT_B1);
   bool atTarget = digitalRead(INPUT_B2);
-  
+  bool fault = digitalRead(INPUT_B3);
+  bool atHome = ((inputData & PROXY_ALL_MASK) == PROXY_ALL_MASK) && !fault;
+
   // Update the Modbus discrete status bits
   modbusServer.discreteInputWrite(ADDR_HOME, atHome);
   modbusServer.discreteInputWrite(ADDR_MOVE_DONE, atTarget);
-  
-  // Set relay 1 (bit 0) if at home
+  modbusServer.discreteInputWrite(ADDR_HOMING_FAULT, fault);
+
+  // Set relay 1 (bit 0) if home and relay 2 (bit 1) if at target
+  word newRelayData = relayData;
   if (atHome) {
-    relayData |= 0x01;
+    newRelayData |= 0x01;
   } else {
-    relayData &= ~0x01;
+    newRelayData &= ~0x01;
   }
-  
-  // Set relay 2 (bit 1) if at target
   if (atTarget) {
-    relayData |= 0x02;
+    newRelayData |= 0x02;
   } else {
-    relayData &= ~0x02;
+    newRelayData &= ~0x02;
   }
-  
+
   // Write the updated relay data back to the holding register so the PLC can see it
-  modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayData);
+  if (newRelayData != relayData) {
+    relayData = newRelayData;
+    modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayData);
+  }
 }
 

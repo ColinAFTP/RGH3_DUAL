@@ -123,7 +123,7 @@ void updateInputs() {
 void patternCheck() {
   // Check which pattern selection must go to the stepper motors
   patternSelection = modbusServer.holdingRegisterRead(ADDR_PATTERN);
-  if (patternSelection < 0 or patternSelection >= NUM_PATTERNS) {
+  if (patternSelection < 0 or patternSelection > NUM_PATTERNS) {          // 0 = home, 1 to NUM_PATTERNS = gap patterns
     patternSelection = patternSelectionPrevious;
     Serial.println();
     Serial.println("Error: Pattern selection is out of bounds!");

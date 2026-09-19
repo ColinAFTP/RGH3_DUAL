@@ -44,26 +44,35 @@ void onI2CRequest() {
     }
 }
 
-// Function that requests IO data from the slave (CPU1). 
-// This function is called from CPU2.
+// Function that requests the 16 bit input word from the slave (CPU1).
+// This function is called from CPU2. It is called about every millisecond while homing, so it does not print.
+// Returns the input word (0 to 65535), or -1 if the transfer failed.
 int readIO() {
-  int value = 0;
+  uint16_t value = 0;
 
-  // Tell CPU1 we want IO data (command = 1)
+  // Tell CPU1 we want IO data
   Wire2.beginTransmission(0x40);
-  Wire2.write(1);
-  Wire2.endTransmission();
+  Wire2.write(I2C_CMD_IO);
+  if (Wire2.endTransmission() != 0) {
+    return -1;
+  }
 
-//   Serial.print("Requesting ("); 
-//   Serial.print(sizeof value); 
-//   Serial.println(" bytes)... ");
-  if (Wire2.requestFrom(0x40, sizeof(value))) {
+  if (Wire2.requestFrom(0x40, sizeof(value)) == sizeof(value)) {
     Wire2.readBytes((byte*)&value, sizeof(value));
     return value;
   }
 
-  Serial.println("IO data read over I2C failed");
-  return -1;  
+  return -1;
+}
+
+// Function that sends the bitmask of spreaders that failed to home to the slave (CPU1).
+// This function is called from CPU2. Returns false if the transfer failed.
+bool writeFaultMask(uint16_t mask) {
+  Wire2.beginTransmission(0x40);
+  Wire2.write(I2C_CMD_FAULT_MASK);
+  Wire2.write((uint8_t)(mask & 0xFF));
+  Wire2.write((uint8_t)(mask >> 8));
+  return Wire2.endTransmission() == 0;
 }
 
 // Function that requests pattern gap data from the slave (CPU1). 

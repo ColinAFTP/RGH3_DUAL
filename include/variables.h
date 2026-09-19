@@ -23,6 +23,8 @@ extern PatternPacket receivePacket;
 extern float gapArrays[NUM_PATTERNS][STRIDE_GAPS]; 
 extern int stepperSpeed;
 extern volatile uint8_t i2cCommand;
+extern volatile uint16_t faultMaskRx;   // Failed spreader bitmask received from CPU2 over I2C (CPU1)
+extern volatile bool faultMaskNew;      // Set by the I2C receive handler when faultMaskRx has a new value (CPU1)
 
 // Variables used for the IO signals
 extern FastShiftIn* FSI;      // This is a pointer, not an object

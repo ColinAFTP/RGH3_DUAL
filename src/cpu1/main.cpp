@@ -12,22 +12,25 @@ static uint32_t inputUpdateTime;
 static uint32_t dataUpdateTime;
 static uint32_t pulseStartTime;
 static bool pulseActive = false;
+static uint32_t faultPulseStartTime;
+static bool faultPulseActive = false;
 
+// Called (in interrupt context) when CPU2 sends data to CPU1. The first byte is the command (see the I2C_CMD_ constants).
 void receiveCommand(int howMany) {
     if (Wire2.available()) {
-        i2cCommand = Wire2.read();   // 1 = status, 2 = gap patterns, etc.
+        i2cCommand = Wire2.read();
+        if (i2cCommand == I2C_CMD_FAULT_MASK && Wire2.available() >= 2) {
+            uint16_t mask = Wire2.read();
+            mask |= (uint16_t)Wire2.read() << 8;
+            faultMaskRx = mask;
+            faultMaskNew = true;         // The main loop copies it to the Modbus register
+        }
     }
 }
 
 void setup()
 {
-  Wire2.begin(0x40);                  // Join I2C bus with address #8
-//  Wire2.onRequest(writeGapPatterns);   // Register event
-  Wire2.onReceive(receiveCommand);
-  Wire2.onRequest(onI2CRequest);    // Register event
-  Wire2.setClock(1000000);
-
-  Serial.begin(9600);                 // Start serial for output
+  Serial.begin(9600);                // Start serial for output
   // Wait for a USB host for up to 3 s only, so the controller still starts when running stand-alone
   while (!Serial && millis() < 3000) {
   }
@@ -60,6 +63,14 @@ void setup()
   inputUpdateTime = millis();
   dataUpdateTime = millis();
   pulseStartTime = millis();
+
+  // Read the inputs once, then start the I2C slave. CPU2 gets no answer until CPU1 is fully up,
+  // so it can never read inputs that have not been sampled yet (it homes at power up from them).
+  inputsCheck();
+  Wire2.begin(0x40);                  // Join I2C bus as slave with address 0x40
+  Wire2.onReceive(receiveCommand);
+  Wire2.onRequest(onI2CRequest);
+  Wire2.setClock(1000000);
 
 }
 
@@ -126,8 +137,9 @@ void loop()
     speedDataPrevious = speedData;
   }
 
-  // Check for new input updates every 25 ms
-  if (millis() - inputUpdateTime >= 25) {  // Update every 25 ms
+  // Check for new input updates every millisecond. CPU2 reads these over I2C while homing and stops the
+  // spreaders the moment a home sensor goes on, so fast sampling keeps the overtravel small.
+  if (millis() - inputUpdateTime >= 1) {
     inputsCheck();
     inputUpdateTime = millis();
   }
@@ -142,6 +154,25 @@ void loop()
   if (pulseActive && (millis() - pulseStartTime >= 500)) {
       digitalWrite(OUTPUT_A1, LOW);
       pulseActive = false;
+  }
+
+  // Copy the failed spreader bitmask that CPU2 sent over I2C to the Modbus register
+  if (faultMaskNew) {
+    faultMaskNew = false;
+    modbusServer.holdingRegisterWrite(ADDR_FAULT_SPREADERS, faultMaskRx);
+  }
+
+  // Fault reset requested by the PLC: clear the coil and give CPU2 a 100 ms pulse on the fault reset line
+  if (modbusServer.coilRead(ADDR_FAULT_RESET)) {
+    modbusServer.coilWrite(ADDR_FAULT_RESET, 0);
+    Serial.println("   | Fault reset requested by PLC");
+    digitalWrite(OUTPUT_A3, HIGH);
+    faultPulseStartTime = millis();
+    faultPulseActive = true;
+  }
+  if (faultPulseActive && (millis() - faultPulseStartTime >= 100)) {
+    digitalWrite(OUTPUT_A3, LOW);
+    faultPulseActive = false;
   }
 
   // Update the ticker every second

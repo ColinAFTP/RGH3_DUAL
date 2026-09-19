@@ -38,13 +38,17 @@ bool motorsMoving() {
   return returnState;
 }
 
+
 // This subroutine calculates the target positions for each stepper motor based on the selected pattern.
+// patternChoice 0 is home (every target is 0, no gap data is used). 1 to NUM_PATTERNS use gap block patternChoice - 1.
+// Each target is the distance of that spreader from its home position: the sum of the gaps between it and the static spreader.
+// Returns false (targets untouched) if the pattern is invalid or any target is outside the rack travel.
 bool stepTargetCalc(int patternChoice) {
 
   bool debugPrinting = DEBUG_STEPPER_CALC;
   float tempStepperArray[NUM_GAPS];
 
-  if (patternChoice < 0 || patternChoice >= NUM_PATTERNS) {
+  if (patternChoice < 0 || patternChoice > NUM_PATTERNS) {
     Serial.print("Invalid pattern selection: ");
     Serial.println(patternChoice);
     return false;
@@ -56,44 +60,39 @@ bool stepTargetCalc(int patternChoice) {
     Serial.println(patternChoice);
   }
 
-  int mid = NUM_GAPS / 2;                 // Midpoint index
-
-  // ----- LEFT SIDE -----
-  // For i = 0 to mid:
-  // temp[i] = sum of gap[i..mid]
-  for (int i = 0; i <= mid; i++) {
-    float sum = 0;
-    for (int j = i; j <= mid; j++) {
-      sum += gapArrays[patternChoice][j];
+  if (patternChoice == 0) {
+    for (int i = 0; i < NUM_GAPS; i++) {
+      tempStepperArray[i] = 0;
     }
-    tempStepperArray[i] = sum * STEPS_PER_MM;
-    if (debugPrinting) {
-      Serial.print("Target ");
-      Serial.print(i);
-      Serial.print(": ");
-      Serial.print(sum);
-      Serial.print(" mm => ");
-      Serial.print(tempStepperArray[i]);
-      Serial.println(" steps");
+  } else {
+    const float* gaps = gapArrays[patternChoice - 1];
+
+    // ----- LEFT SIDE (spreaders 1 to 4, stepper index 0 to NUM_LEFT_SPREADERS-1) -----
+    // temp[i] = sum of gap[i..last left gap]
+    for (int i = 0; i < NUM_LEFT_SPREADERS; i++) {
+      float sum = 0;
+      for (int j = i; j < NUM_LEFT_SPREADERS; j++) {
+        sum += gaps[j];
+      }
+      tempStepperArray[i] = sum * STEPS_PER_MM;
+    }
+
+    // ----- RIGHT SIDE (spreaders 6 to 10, stepper index NUM_LEFT_SPREADERS to NUM_GAPS-1) -----
+    // temp[i] = sum of gap[first right gap..i]
+    for (int i = NUM_LEFT_SPREADERS; i < NUM_GAPS; i++) {
+      float sum = 0;
+      for (int j = NUM_LEFT_SPREADERS; j <= i; j++) {
+        sum += gaps[j];
+      }
+      tempStepperArray[i] = sum * STEPS_PER_MM;
     }
   }
-  
-  // ----- RIGHT SIDE -----
-  // For i = mid+1 to NUM_GAPS-1:
-  // temp[i] = sum of gap[mid+1..i]
-  // (gap[mid] is the last left spreader to the static spreader, gap[mid+1] is the static spreader to the first right spreader)
-  for (int i = mid + 1; i < NUM_GAPS; i++) {
-    float sum = 0;
-    for (int j = mid + 1; j <= i; j++) {
-      sum += gapArrays[patternChoice][j];
-    }
-    tempStepperArray[i] = sum * STEPS_PER_MM;
-    if (debugPrinting) {
+
+  if (debugPrinting) {
+    for (int i = 0; i < NUM_GAPS; i++) {
       Serial.print("Target ");
       Serial.print(i);
       Serial.print(": ");
-      Serial.print(sum);
-      Serial.print(" mm => ");
       Serial.print(tempStepperArray[i]);
       Serial.println(" steps");
     }
@@ -123,6 +122,13 @@ void updateStepperPositions() {
   }
 }
 
+// Tell TeensyStep that every stepper is now at this position (used after homing sets the positions to 0)
+void setAllStepperPositions(long position) {
+  for (int i = 0; i < NUM_GAPS; i++) {
+    steppers[i]->setPosition(position);
+  }
+}
+
 // This subroutine updates the speed of all stepper motors.
 void updateStepperSpeeds(int speed) {
   // Guard against zero speed
@@ -140,7 +146,7 @@ bool moveInProgress() {
   return moving;
 }
 
-// This subroutine starts the movement of the stepper motors. It does not block.
+// This subroutine starts the movement of the stepper motors to stepperTargets. It does not block.
 // Returns false if a move is already running.
 bool triggerMove() {
   if (moving) {
@@ -148,8 +154,7 @@ bool triggerMove() {
     return false;
   }
 
-  // Clear the at-home and at-target outputs
-  digitalWrite(OUTPUT_B1, LOW);
+  // Clear the at-target output
   digitalWrite(OUTPUT_B2, LOW);
 
   // Set the new stepper targets
@@ -162,18 +167,13 @@ bool triggerMove() {
   return true;
 }
 
-// Call every loop. When all steppers have stopped, signals at-target (OUTPUT_B2), and at-home
-// (OUTPUT_B1) if every stepper is at position 0. The homing routine, once written, must set
-// the positions to 0 and raise OUTPUT_B1 the same way.
-void moveService() {
+// Call every loop. Returns true once, on the loop pass where all steppers have just stopped.
+// The caller decides what a finished move means (at target, or the next homing stage).
+bool moveService() {
   if (moving && !motorsMoving()) {
     moving = false;
     updateStepperPositions();
-    bool atHome = true;
-    for (int i = 0; i < NUM_GAPS; i++) {
-      if (stepperPositions[i] != 0) atHome = false;
-    }
-    digitalWrite(OUTPUT_B1, atHome);
-    digitalWrite(OUTPUT_B2, HIGH);
+    return true;
   }
+  return false;
 }
