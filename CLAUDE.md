@@ -46,7 +46,7 @@ Correctness
 - [x] `triggerMove` at-target/at-home logic. Now: B2 after every completed move; B1 only when all stepper positions are 0 (interim, until homing exists). BOTH signals go to the PLC and must be kept.
 - [x] `onI2CRequest` (ISR) copies `gapArrays` while the main loop may be writing it (torn packet).
 - [x] `initShiftRegisters` never sets `INPUTS_DATA_LOAD_PIN` to OUTPUT; `inputsCheck` blocks 2 ms per 25 ms with `delay(1)`.
-- [x] `INIT_ACCEL` applied, targets rounded. Still open:  relay range check on a `word` is dead code.
+- [x] `INIT_ACCEL` applied, targets rounded. Still open: relay range check on a `word` is dead code.
 
 Robustness / production
 - [x] `while(!Serial)` in both `setup()`s: firmware never starts without USB attached.
@@ -61,8 +61,8 @@ Missing features
 Housekeeping
 - [ ] Delete unused `gapPattern0–5`, duplicate `feedbackCheck` declaration, move Ethernet globals out of shared `variables.cpp`, pin git `lib_deps` (local copies also in `lib/`), delete `GEMINI.txt`/`GEMINI.md`.
 - [ ] Gap resolution is whole mm (16-bit registers); decide whether 0.1 mm scaling is needed.
-- [ ] Fix comment in `stepTargetCalc` right side ("gap[mid..i]" should read "gap[mid+1..i]").
+- [x] Fix comment in `stepTargetCalc` right side ("gap[mid..i]" should read "gap[mid+1..i]").
 
 ## Session log
 
-- 2026-09-19: Review, checkpoint commit 12cc709, then correctness/robustness fixes (uncommitted until confirmed): stale-data fix (CPU1 refreshes on pattern change, CPU2 re-reads on trigger), target validation, non-blocking moves, at-home/at-target signals, staged gap copy, timed serial wait, debug flags. Builds clean; NOT yet bench-tested. Next: bench test on desk board, then homing (proximity sensors via I2C cmd 1 `readIO`), then manual mode (DIP switch), then housekeeping.
+- 2026-09-19: Review, checkpoint commit 12cc709, then correctness/robustness fixes (commit d74b415): stale-data fix (CPU1 refreshes on pattern change, CPU2 re-reads on trigger), target validation, non-blocking moves, at-home/at-target signals, staged gap copy, timed serial wait, debug flags. Builds clean; NOT yet bench-tested. Next: bench test on desk board, then homing (proximity sensors via I2C cmd 1 `readIO`), then manual mode (DIP switch), then housekeeping.
