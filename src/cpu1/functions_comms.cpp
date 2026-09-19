@@ -101,7 +101,9 @@ void ethernetConnect() {
   static uint32_t lastNoClientMsg = 0;            // timestamp of last "no client" message
   const uint32_t interval = 5000;                 // 5 seconds
 
-  ethernetClient = ethernetServer.available();    // <— store globally
+  // accept() returns a connected client at once. available() would wait up to 10 s for the client's first bytes,
+  // freezing the whole loop for a client that connects and sends nothing.
+  ethernetClient = ethernetServer.accept();       // <— store globally
   if (ethernetClient.connected()) {
     Serial.println("Ethernet client connected");
     modbusServer.accept(ethernetClient);

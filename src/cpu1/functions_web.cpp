@@ -280,8 +280,10 @@ void cpu2StatusService() {
 void webService() {
   switch (webState) {
     case WEB_IDLE: {
-      EthernetClient c = webServer.available();
-      if (c) {
+      // accept() returns a connected client at once. available() would wait for its first bytes, up to 10 s,
+      // and so could freeze the whole loop (including the Modbus polling) for a client that sends nothing.
+      EthernetClient c = webServer.accept();
+      if (c.connected()) {
         webClient = c;
         webState = WEB_READ;
         webStart = millis();
@@ -341,7 +343,6 @@ void webService() {
         sentTotal += chunk;
       }
       if (sentTotal >= total) {
-        webClient.flush();
         webClose();
       } else if (millis() - webStart > 4000 || !webClient.connected()) {
         webClose();
