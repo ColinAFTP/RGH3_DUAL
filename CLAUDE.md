@@ -149,3 +149,10 @@ Register 108 reports the failed spreader (spreader 1 for proxy 2 left off). A pr
 
 - `pio run -e <env> -t upload` uses whatever board is in the bootloader; with both boards on USB it can flash the wrong one, and a stale `teensy.exe`/`teensy_reboot.exe` can make it reuse an old image (the CPU2 board once ended up with CPU1 firmware). ALWAYS: unplug the other board's USB, press the program button, then confirm from the serial banner ("CPU 1 online" / "CPU 2 online") which firmware is running.
 - Unkillable zombie `teensy_reboot.exe` entries in tasklist are harmless.
+
+## Input glitch investigation and filter (2026-09-19)
+
+- CPU1 logs every proxy input change (bits 0-10) on the web event log; a change that reverses within 5 ms is counted as a glitch (page: Status > Input Glitches). Logging uses the RAW samples (`inputDataRaw`).
+- Bench data (5.4 min, nothing touched): 4 glitches, each exactly one 1 ms sample, all on P1 or P11 (the unused over-travel inputs, bits 0 and 10); none on proxies 2-10. Two were exactly 500 ms apart, the same as the web page poll interval: NOT yet ruled out that web/Ethernet activity couples into the inputs. Test: close the page for a few minutes and compare the glitch counter. Earlier, before this logging existed, a few "Home OFF / Home ON" pairs 1 ms apart were seen; the log did not say which input caused them.
+- Filter: `INPUT_FILTER_SAMPLES = 3` in constants.h. `inputsCheck()` (src/cpu1/functions_io_cpu1.cpp) changes an input only after its raw value has held for that many consecutive samples. `inputData` = filtered (used by everything, including I2C to CPU2 and the Home signal); `inputDataRaw` = as sampled. Costs about 3 ms latency (about 0.06 mm at the 1500 steps/s homing rate). Set to 1 to turn it off. Glitches the filter removes are logged as "Input glitch (filtered out)".
+- Bench check after adding the filter: pattern 1 (~2.5 s) and home (~2.4 s) unchanged.
