@@ -36,7 +36,7 @@ tr.act td{background:rgba(26,156,75,.13)}
 <main>
 <section class="card"><h2>Status</h2>
 <p><span class="chip" id="home">Home</span> <span class="chip" id="target">At Target</span> <span class="chip" id="fault">Fault</span></p>
-<table><tr><td>CPU2 State</td><td id="state">-</td></tr><tr><td>PLC Pattern</td><td id="pat">-</td></tr><tr><td>PLC Speed</td><td id="spd">-</td></tr><tr><td>Ticker</td><td id="ticker">-</td></tr>
+<table><tr><td>CPU2 State</td><td id="state">-</td></tr><tr><td>PLC Pattern</td><td id="pat">-</td></tr><tr><td>PLC Speed</td><td id="spd">-</td></tr><tr><td>Ticker</td><td id="ticker">-</td></tr><tr><td>Input Glitches</td><td id="gl">-</td></tr>
 <tr><td>Failed Spreaders (Reg 108)</td><td id="mask">-</td></tr></table></section>
 <section class="card"><h2>Spreaders</h2><table id="sp"><tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr></table></section>
 <section class="card"><h2>Inputs (Proxies)</h2><div class="bits" id="in"></div></section>
@@ -54,10 +54,10 @@ function fmt(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.fl
 function bits(el,v,lbl){el.innerHTML=lbl.map((l,i)=>'<div>'+led(v>>i&1)+'<br>'+l+'</div>').join('')}
 function render(s){
  $('up').textContent=fmt(Math.floor(s.up/1000));$('loop').textContent=(s.loopAvg/1000).toFixed(2)+' ms avg, '+(s.loopMax/1000).toFixed(2)+' ms max';
- $('plc').textContent=s.plc?'connected':'no client';chip('plc',s.plc);
- const c=s.cpu2;$('c2').textContent=c.ok?'online':'no data';chip('c2',c.ok,c.ok?'on':'bad');
+ $('plc').textContent=s.plc?'Connected':'No Client';chip('plc',s.plc);
+ const c=s.cpu2;$('c2').textContent=c.ok?'Online':'No Data';chip('c2',c.ok,c.ok?'on':'bad');
  chip('home',s.home);chip('target',s.target);chip('fault',s.fault,'bad');
- $('state').textContent=c.ok?STATE[c.state]||c.state:'-';$('pat').textContent=s.pattern+(s.pattern?'':' (home)');$('spd').textContent=s.speed;$('ticker').textContent=s.tick;
+ $('state').textContent=c.ok?STATE[c.state]||c.state:'-';$('pat').textContent=s.pattern+(s.pattern?'':' (home)');$('spd').textContent=s.speed;$('ticker').textContent=s.tick;$('gl').textContent=s.glitches;
  $('mask').textContent='0x'+s.mask.toString(16).toUpperCase();
  let h='<tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr>';
  SP.forEach((n,i)=>{h+='<tr><td>S'+n+'</td><td>'+led(s.inputs>>(i+1)&1)+'</td><td>'+(c.ok?(c.pos[i]/10).toFixed(1):'-')+'</td><td>'+led(s.mask>>(n-1)&1,'bad')+'</td></tr>'});

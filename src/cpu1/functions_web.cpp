@@ -81,10 +81,10 @@ void buildStatus() {
   uint32_t now = millis();
   bool cpu2Ok = cpu2StatusMs != 0 && (now - cpu2StatusMs) < 1500;
   jp("{\"up\":%lu,\"loopMax\":%lu,\"loopAvg\":%lu,\"plc\":%d,\"home\":%d,\"target\":%d,\"fault\":%d,\"mask\":%u,"
-     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"inputs\":%u,\"relays\":%u,",
+     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"inputs\":%u,\"relays\":%u,",
      (unsigned long)now, (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
      ethernetClient.connected() ? 1 : 0, statusHome ? 1 : 0, statusAtTarget ? 1 : 0, statusFault ? 1 : 0,
-     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned)inputData, (unsigned)relayData);
+     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(), (unsigned)inputData, (unsigned)relayData);
   jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"pos\":[",
      cpu2Ok ? 1 : 0, (unsigned long)cpu2RxCount, (unsigned)cpu2Status.state, (unsigned)(cpu2Status.flags & 1),
      (unsigned)cpu2Status.faultMask);
@@ -350,4 +350,79 @@ void webService() {
       break;
     }
   }
+}
+
+// Log every change on the proxy inputs (proxy 1 to 11, input bits 0 to 10). A change that reverses within 5 ms is a glitch:
+// the log then says which sensor blipped and for how long. Call once per input sample.
+namespace {
+uint32_t inputGlitchCount = 0;
+}
+
+void logInputChanges() {
+  constexpr uint16_t WATCH = 0x07FF;                    // Input bits 0 to 10 = proxy 1 to 11
+  static bool started = false;
+  static uint16_t last = 0;
+  static uint16_t lastChanged = 0;
+  static uint32_t lastChangeUs = 0;
+  static uint32_t windowStart = 0;
+  static int windowCount = 0;
+  static uint32_t suppressed = 0;
+
+  uint16_t now = inputData & WATCH;
+  if (!started) {                                       // The first sample only sets the reference
+    started = true;
+    last = now;
+    return;
+  }
+  if (now == last) return;
+
+  uint16_t changed = now ^ last;
+  uint32_t t = micros();
+  uint32_t dt = t - lastChangeUs;
+  bool glitch = (changed == lastChanged) && dt < 5000;  // The same inputs changed back within 5 ms
+
+  // The names of the inputs that changed, for example "P2 off P3 on"
+  char list[64] = "";
+  for (int b = 0; b < 11; b++) {
+    if (changed & (1 << b)) {
+      char one[14];
+      bool on = (now >> b) & 1;
+      if (glitch) {
+        snprintf(one, sizeof(one), "%sP%d was %s", list[0] ? ", " : "", b + 1, on ? "off" : "on");
+      } else {
+        snprintf(one, sizeof(one), "%sP%d %s", list[0] ? ", " : "", b + 1, on ? "on" : "off");
+      }
+      strncat(list, one, sizeof(list) - strlen(list) - 1);
+    }
+  }
+  if (glitch) inputGlitchCount++;
+
+  // At most 10 lines a second, so a chattering sensor cannot flood the log
+  uint32_t ms = millis();
+  if (ms - windowStart >= 1000) {
+    windowStart = ms;
+    windowCount = 0;
+    if (suppressed) {
+      logEvent("%lu input changes not logged (too many)", (unsigned long)suppressed);
+      suppressed = 0;
+    }
+  }
+  if (windowCount < 10) {
+    windowCount++;
+    if (glitch) {
+      logEvent("Input glitch: %s for %lu us", list, (unsigned long)dt);
+    } else {
+      logEvent("Input change: %s", list);
+    }
+  } else {
+    suppressed++;
+  }
+
+  last = now;
+  lastChanged = changed;
+  lastChangeUs = t;
+}
+
+uint32_t inputGlitches() {
+  return inputGlitchCount;
 }

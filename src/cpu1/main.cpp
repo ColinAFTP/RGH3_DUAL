@@ -174,6 +174,7 @@ void loop()
   // spreaders the moment a home sensor goes on, so fast sampling keeps the overtravel small.
   if (millis() - inputUpdateTime >= 1) {
     inputsCheck();
+    logInputChanges();
     inputUpdateTime = millis();
   }
   if (inputData != inputDataPrevious) {
