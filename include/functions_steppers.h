@@ -9,5 +9,6 @@ void updateStepperSpeeds(int speed);
 bool triggerMove();                     // Start a non-blocking TeensyStep move to stepperTargets. Returns false if already moving
 bool moveService();                     // Call every loop: returns true once when a move has just finished
 bool moveInProgress();
+void emergencyStopMoves();              // Stop a running TeensyStep move at once, without deceleration (over travel protection)
 
 #endif

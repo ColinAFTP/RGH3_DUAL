@@ -12,6 +12,7 @@ constexpr int ADDR_SPEED = 105;
 constexpr int ADDR_RELAYS = 106;              // Each of the first 16 bits corresponds to the switching of the 16 relays
 constexpr int ADDR_MANUAL_PTR = 107;          // Pointer to which spreader will be moved in manual mode (1-9)
 constexpr int ADDR_FAULT_SPREADERS = 108;     // Bitmask of the spreaders that failed to home. Bit (n-1) is spreader n (spreader 5 is static so bit 4 is never set). Read only from the PLC. Cleared by a fault reset.
+constexpr int ADDR_FAULT_TYPE = 109;          // Fault type (FAULT_NONE, FAULT_HOMING or FAULT_OVERTRAVEL). For FAULT_OVERTRAVEL the bit in ADDR_FAULT_SPREADERS is spreader 1 (left) or 10 (right). Read only from the PLC
 
 // Pattern 1 gaps
 constexpr int ADDR_PATTERN_0_0 = 111;
@@ -82,7 +83,7 @@ const int ADDR_FAULT_RESET = 107;       // PLC sets this to reset a fault. CPU1 
 const int ADDR_HOME = 117;              // Gripper is home: all nine home proximity sensors (proxy 2 to 10) are on and there is no fault. Calculated live by CPU1
 const int ADDR_MOVE_DONE = 118;         // At target: the requested pattern move or homing has finished. Off while a move or homing is running
 const int ADDR_MANUAL_MODE = 119;       // Gripper is in manual mode
-const int ADDR_HOMING_FAULT = 120;      // Homing fault is active. Register ADDR_FAULT_SPREADERS says which spreaders failed. Cleared with ADDR_FAULT_RESET
+const int ADDR_HOMING_FAULT = 120;      // Fault is active (a spreader failed to home, or an over travel sensor stopped the motion). ADDR_FAULT_TYPE says which, ADDR_FAULT_SPREADERS which spreaders. Cleared with ADDR_FAULT_RESET
 
 // General constants
 constexpr bool DEBUG_STEPPER_CALC = false;  // Print stepper target calculations
@@ -109,17 +110,32 @@ constexpr int NUM_LEFT_SPREADERS = 4;       // Spreaders 1 to 4 are left of the 
 constexpr int NUM_RIGHT_SPREADERS = 5;      // Spreaders 6 to 10 are right of the static spreader (stepper index 4 to 8, gaps 4 to 8)
 static_assert(NUM_LEFT_SPREADERS + NUM_RIGHT_SPREADERS == NUM_GAPS, "Spreader layout must add up to NUM_GAPS");
 
+// Over travel sensors. Proxy 1 (left, triggered by spreader 1) and proxy 11 (right, triggered by spreader 10) are on input bits 0 and 10.
+// When one turns on, CPU1 raises the OUTPUT_A4 line to CPU2, which stops the TeensyStep motion at once and raises a fault
+// (fault type FAULT_OVERTRAVEL, register ADDR_FAULT_SPREADERS says which spreader). The direct pulse homing stage ignores the line,
+// because homing closes the spreaders and so moves them away from the sensors. Recovery: fault reset (coil ADDR_FAULT_RESET) starts a search home.
+// KEEP THIS false UNTIL THE TWO INPUTS ARE WIRED: a floating input would cause a fault at random. The sensors are normally open like the others.
+constexpr bool OVERTRAVEL_ENABLED = false;
+constexpr int OVERTRAVEL_LEFT_BIT = 0;                  // Input bit of proxy 1
+constexpr int OVERTRAVEL_RIGHT_BIT = 10;                // Input bit of proxy 11
+constexpr uint16_t OVERTRAVEL_MASK = 0x0401;            // Input bits 0 and 10
+
+// Fault types, reported in register ADDR_FAULT_TYPE
+constexpr uint8_t FAULT_NONE = 0;
+constexpr uint8_t FAULT_HOMING = 1;                     // A spreader failed to home
+constexpr uint8_t FAULT_OVERTRAVEL = 2;                 // An over travel sensor turned on
+
 // Input filter (CPU1). Each input must hold its new value for this many consecutive 1 ms samples before it counts. Removes single-sample noise
 // pulses (seen on the bench) at the cost of this many milliseconds of latency: about 0.02 mm per sample at the 1500 steps/s homing rate.
 // Set to 1 for no filtering.
 constexpr int INPUT_FILTER_SAMPLES = 3;
 
 // Inputs whose changes are written to the web event log and counted as glitches. Proxy 1 and 11 (the over travel sensors, input bits 0 and 10)
-// are left out while they are not wired: floating inputs pick up noise all the time. Use 0x07FF when they are connected.
-constexpr uint16_t INPUT_LOG_MASK = 0x03FE;           // Input bits 1 to 9 = proxy 2 to 10, the nine home sensors
+// are left out while they are not wired (OVERTRAVEL_ENABLED false): floating inputs pick up noise all the time.
+constexpr uint16_t INPUT_LOG_MASK = OVERTRAVEL_ENABLED ? 0x07FF : 0x03FE;   // 0x03FE = input bits 1 to 9 = proxy 2 to 10, the nine home sensors. Bits 0 and 10 are added when OVERTRAVEL_ENABLED
 
 // Home proximity sensors. They are wired to the CPU1 input shift registers (input bit = proxy number - 1).
-// Proxy 1 (bit 0) and proxy 11 (bit 10) are the left and right over travel sensors and are not used at the moment.
+// Proxy 1 (bit 0) and proxy 11 (bit 10) are the left and right over travel sensors (see OVERTRAVEL_ENABLED).
 // Proxy 2 to 5 are the home sensors of spreaders 1 to 4 and proxy 6 to 10 those of spreaders 6 to 10, so the sensor of stepper index i is on input bit PROXY_FIRST_BIT + i.
 // A sensor is on when its spreader is closed up against its neighbour on the side of the static spreader.
 constexpr int PROXY_FIRST_BIT = 1;
@@ -144,7 +160,7 @@ constexpr int HOME_IO_FAIL_LIMIT = 50;                  // Consecutive failed I2
 constexpr uint8_t I2C_CMD_IO = 1;                       // Request: 16 bit input word (uint16_t)
 constexpr uint8_t I2C_CMD_GAPS = 2;                     // Request: all gap patterns and the stepper speed (PatternPacket)
 constexpr uint8_t I2C_CMD_PATTERN = 3;                  // Request: pattern selection (int)
-constexpr uint8_t I2C_CMD_FAULT_MASK = 4;               // Write: followed by the 16 bit failed spreader bitmask, low byte first. CPU1 copies it to ADDR_FAULT_SPREADERS
+constexpr uint8_t I2C_CMD_FAULT_MASK = 4;               // Write: followed by the 16 bit failed spreader bitmask (low byte first) and the fault type byte. CPU1 copies them to ADDR_FAULT_SPREADERS and ADDR_FAULT_TYPE
 
 // CPU2 status and event reporting to CPU1 (for the CPU1 web page)
 constexpr uint8_t I2C_CMD_STATUS = 5;                   // Write: a StatusPacket (see structures.h)
@@ -173,6 +189,7 @@ constexpr uint8_t EVT_HOME_FAULT = 10;                  // Homing fault. Arg = f
 constexpr uint8_t EVT_FAULT_RESET = 11;                 // Fault reset, search home started
 constexpr uint8_t EVT_REFUSED = 12;                     // Request refused. Arg = EVT_REASON_ constant
 constexpr uint8_t EVT_IO_FAIL = 13;                     // Home sensors could not be read over I2C, pulses stopped
+constexpr uint8_t EVT_OVERTRAVEL = 14;                  // Over travel sensor stopped the motion. Arg = spreader bitmask (bit 0 = spreader 1, bit 9 = spreader 10)
 
 constexpr int EVT_REASON_BUSY = 1;                      // Already moving or homing
 constexpr int EVT_REASON_FAULT = 2;                     // Homing fault active
@@ -198,10 +215,10 @@ constexpr int INPUTS_DATA_CLOCK_PIN = 7;      // CP
 constexpr int OUTPUT_A1 = 33;                 // Start move: CPU1 holds this high for 500 ms when the PLC changes the pattern (register 104). CPU2 acts on the rising edge and reads the pattern over I2C. Pattern 0 means go home
 constexpr int OUTPUT_A2 = 32;                 // Manual mode enabled (not implemented yet)
 constexpr int OUTPUT_A3 = 31;                 // Fault reset: CPU1 pulses this high for 100 ms when the PLC sets the fault reset coil. CPU2 clears its homing fault on the rising edge and starts a search home
-constexpr int OUTPUT_A4 = 30;                 // Spare
+constexpr int OUTPUT_A4 = 30;                 // Over travel: CPU1 holds this high while an over travel sensor (proxy 1 or 11) is on. CPU2 stops the motion and raises a fault. Only used when OVERTRAVEL_ENABLED
 constexpr int INPUT_B1 = 29;                  // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors
 constexpr int INPUT_B2 = 28;                  // At target: high when CPU2 has finished a move or homing, low while it is moving or homing
-constexpr int INPUT_B3 = 27;                  // Homing fault: high while CPU2 has a homing fault. The failed spreaders are sent over I2C (I2C_CMD_FAULT_MASK)
+constexpr int INPUT_B3 = 27;                  // Fault: high while CPU2 has a fault (homing failed or over travel). The spreaders and fault type are sent over I2C (I2C_CMD_FAULT_MASK)
 constexpr int INPUT_B4 = 26;                  // Spare
 
 // IP address DIP switch pins
@@ -241,10 +258,10 @@ constexpr int STEPPER12_DIR_PIN = 27;
 constexpr int INPUT_A1 = 23;                  // Start move: CPU2 acts on the rising edge, reads the pattern over I2C. Pattern 0 means go home
 constexpr int INPUT_A2 = 17;                  // Manual mode enabled (not implemented yet)
 constexpr int INPUT_A3 = 18;                  // Fault reset: rising edge clears the homing fault and starts a search home
-constexpr int INPUT_A4 = 19;                  // Spare
+constexpr int INPUT_A4 = 19;                  // Over travel: high while an over travel sensor is on (level, not an edge). Ignored during the direct pulse homing stage
 constexpr int OUTPUT_B1 = 20;                 // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors
 constexpr int OUTPUT_B2 = 21;                 // At target: set high when a move or homing has finished, cleared when a move or homing starts
-constexpr int OUTPUT_B3 = 22;                 // Homing fault: set high while a homing fault is active (until reset with INPUT_A3)
+constexpr int OUTPUT_B3 = 22;                 // Fault: set high while a fault (homing failed or over travel) is active, until reset with INPUT_A3
 constexpr int OUTPUT_B4 = 26;                 // Spare
 
 #endif

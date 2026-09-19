@@ -52,6 +52,7 @@ void statusService() {
   packet.state = currentState();
   packet.flags = positionsKnown() ? 1 : 0;
   packet.faultMask = faultMask();
+  packet.faultType = faultType();
   updateStepperPositions();
   for (int i = 0; i < NUM_GAPS; i++) {
     packet.positions[i] = (int16_t)lroundf(stepperPositions[i] * 10.0f / STEPS_PER_MM);

@@ -78,6 +78,9 @@ void setup()
 void loop()
 {
 
+  // Over travel sensors: stop everything at once if CPU1 says one is on
+  overTravelService();
+
   // Send the status and queued events to CPU1 for its web page
   statusService();
 

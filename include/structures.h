@@ -19,6 +19,7 @@ typedef struct __attribute__((packed)) {
     uint8_t state;                      // STATE_ constant
     uint8_t flags;                      // Bit 0: stepper positions are known (homed)
     uint16_t faultMask;                 // Failed spreader bitmask, same as register ADDR_FAULT_SPREADERS
+    uint8_t faultType;                  // FAULT_ constant, same as register ADDR_FAULT_TYPE
     int16_t positions[NUM_GAPS];        // Stepper positions in tenths of a millimetre from home
     uint8_t numEvents;                  // Number of valid entries in events[]
     StatusEvent events[STATUS_MAX_EVENTS];

@@ -20,10 +20,11 @@ static bool faultPulseActive = false;
 void receiveCommand(int howMany) {
     if (Wire2.available()) {
         i2cCommand = Wire2.read();
-        if (i2cCommand == I2C_CMD_FAULT_MASK && Wire2.available() >= 2) {
+        if (i2cCommand == I2C_CMD_FAULT_MASK && Wire2.available() >= 3) {
             uint16_t mask = Wire2.read();
             mask |= (uint16_t)Wire2.read() << 8;
             faultMaskRx = mask;
+            faultTypeRx = Wire2.read();
             faultMaskNew = true;         // The main loop copies it to the Modbus register
         } else if (i2cCommand == I2C_CMD_STATUS && Wire2.available() >= (int)sizeof(StatusPacket)) {
             // Status from CPU2 for the web page. It goes into a small ring that the main loop empties.
@@ -184,6 +185,21 @@ void loop()
     inputDataPrevious = inputData;
   }
 
+
+  // Over travel sensors (proxy 1 and 11): raise the line to CPU2 while one is on. CPU2 stops the motion and raises a fault.
+  if (OVERTRAVEL_ENABLED) {
+    static bool overTravelPrev = false;
+    bool overTravel = (inputData & OVERTRAVEL_MASK) != 0;
+    if (overTravel != overTravelPrev) {
+      digitalWrite(OUTPUT_A4, overTravel ? HIGH : LOW);
+      if (overTravel) {
+        logEvent("OVER TRAVEL sensor on: %s", (inputData & (1 << OVERTRAVEL_LEFT_BIT)) ? ((inputData & (1 << OVERTRAVEL_RIGHT_BIT)) ? "left and right" : "left (spreader 1)") : "right (spreader 10)");
+      } else {
+        logEvent("Over travel sensors off");
+      }
+      overTravelPrev = overTravel;
+    }
+  }
   // Handle pulse timing (non-blocking)
   if (pulseActive && (millis() - pulseStartTime >= 500)) {
       digitalWrite(OUTPUT_A1, LOW);
@@ -194,6 +210,7 @@ void loop()
   if (faultMaskNew) {
     faultMaskNew = false;
     modbusServer.holdingRegisterWrite(ADDR_FAULT_SPREADERS, faultMaskRx);
+    modbusServer.holdingRegisterWrite(ADDR_FAULT_TYPE, faultTypeRx);
   }
 
   // Fault reset requested by the PLC: clear the coil and give CPU2 a 100 ms pulse on the fault reset line

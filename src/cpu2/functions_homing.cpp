@@ -34,6 +34,7 @@ HomeState homeState = HOME_IDLE;
 bool posKnown = false;                  // Stepper positions are trustworthy (homed, no fault since)
 bool faultOn = false;
 uint16_t faultMaskValue = 0;            // Bit (spreader number - 1) is set for each spreader that failed to home
+uint8_t faultTypeValue = FAULT_NONE;    // FAULT_HOMING or FAULT_OVERTRAVEL while a fault is active
 bool maskPublished = true;              // False while the mask still has to be sent to CPU1
 uint32_t lastPublishTry = 0;
 int ioFailCount = 0;
@@ -107,23 +108,24 @@ void endPulses() {
 void publishMask() {
   if (maskPublished) return;
   lastPublishTry = millis();
-  if (writeFaultMask(faultMaskValue)) {
+  if (writeFaultMask(faultMaskValue, faultTypeValue)) {
     maskPublished = true;
   }
 }
 
-void raiseFault(uint16_t mask) {
+void raiseFault(uint16_t mask, uint8_t type = FAULT_HOMING) {
   endPulses();
   homeState = HOME_IDLE;
   faultOn = true;
   posKnown = false;
   faultMaskValue = mask;
+  faultTypeValue = type;
   maskPublished = false;
   digitalWrite(OUTPUT_B2, LOW);
   digitalWrite(OUTPUT_B3, HIGH);
-  Serial.print("HOMING FAULT. Failed spreader bitmask: 0x");
+  Serial.print(type == FAULT_OVERTRAVEL ? "OVER TRAVEL FAULT. Spreader bitmask: 0x" : "HOMING FAULT. Failed spreader bitmask: 0x");
   Serial.println(mask, HEX);
-  statusEvent(EVT_HOME_FAULT, mask);
+  statusEvent(type == FAULT_OVERTRAVEL ? EVT_OVERTRAVEL : EVT_HOME_FAULT, mask);
   publishMask();
 }
 
@@ -298,9 +300,29 @@ void faultReset() {
   faultOn = false;
   digitalWrite(OUTPUT_B3, LOW);
   faultMaskValue = 0;
+  faultTypeValue = FAULT_NONE;
   maskPublished = false;
   publishMask();
   beginCascade();
+}
+
+// Over travel protection. CPU1 holds INPUT_A4 high while an over travel sensor is on. Stop the TeensyStep motion at once and raise a fault.
+// Not checked during the direct pulse stage: homing closes the spreaders, which moves them away from the sensors.
+void overTravelService() {
+  if (!OVERTRAVEL_ENABLED || faultOn || homeState == HOME_CASCADE) return;
+  if (!digitalRead(INPUT_A4)) return;
+
+  emergencyStopMoves();
+
+  // Which side? Ask CPU1 for the inputs. If that fails, report both spreaders.
+  uint16_t mask = 0;
+  int io = readIO();
+  if (io >= 0) {
+    if (io & (1 << OVERTRAVEL_LEFT_BIT)) mask |= spreaderBit(0);
+    if (io & (1 << OVERTRAVEL_RIGHT_BIT)) mask |= spreaderBit(NUM_GAPS - 1);
+  }
+  if (mask == 0) mask = spreaderBit(0) | spreaderBit(NUM_GAPS - 1);
+  raiseFault(mask, FAULT_OVERTRAVEL);
 }
 
 int homingStage() {
@@ -313,4 +335,8 @@ int homingStage() {
 
 uint16_t faultMask() {
   return faultMaskValue;
+}
+
+uint8_t faultType() {
+  return faultTypeValue;
 }

@@ -24,7 +24,19 @@ Stepper stepper9(STEPPER9_PULSE_PIN, STEPPER9_DIR_PIN);
 Stepper* steppers[NUM_GAPS] = {&stepper1, &stepper2, &stepper3, &stepper4, &stepper5, &stepper6, &stepper7, &stepper8, &stepper9};
 
 // Initialise StepperGroup with the actual stepper objects
-StepperGroup g1{stepper1, stepper2, stepper3, stepper4, stepper5, stepper6, stepper7, stepper8, stepper9};
+// The stepper group, with a way to stop its lead stepper at once. Only the lead stepper of a running group owns a timer
+// and leadStepper is only valid once a move has been started, so emergencyStopLead() may only be called while a move is running.
+class SpreaderGroup : public StepperGroup {
+ public:
+  using StepperGroup::StepperGroup;
+  void emergencyStopLead() {
+    if (leadStepper != nullptr && leadStepper->isMoving) {
+      leadStepper->emergencyStop();
+    }
+  }
+};
+
+SpreaderGroup g1{stepper1, stepper2, stepper3, stepper4, stepper5, stepper6, stepper7, stepper8, stepper9};
 
 
 // This subroutine checks if any of the motors are moving
@@ -176,4 +188,23 @@ bool moveService() {
     return true;
   }
   return false;
+}
+
+// Stop a running TeensyStep move at once, without deceleration (used by the over travel protection).
+// The positions are then no longer reliable, so the caller must raise a fault that forces a new home.
+void emergencyStopMoves() {
+  if (moving) {
+    noInterrupts();
+    g1.emergencyStopLead();
+    interrupts();
+    moving = false;
+    // The timer may have been stopped in the middle of a step pulse: leave every step pin low
+    const uint8_t stepPins[NUM_GAPS] = {
+      STEPPER1_PULSE_PIN, STEPPER2_PULSE_PIN, STEPPER3_PULSE_PIN, STEPPER4_PULSE_PIN, STEPPER5_PULSE_PIN,
+      STEPPER6_PULSE_PIN, STEPPER7_PULSE_PIN, STEPPER8_PULSE_PIN, STEPPER9_PULSE_PIN };
+    for (int i = 0; i < NUM_GAPS; i++) {
+      digitalWrite(stepPins[i], LOW);
+    }
+  }
+  updateStepperPositions();
 }

@@ -40,11 +40,12 @@ int readIO() {
 
 // Function that sends the bitmask of spreaders that failed to home to the slave (CPU1).
 // Returns false if the transfer failed.
-bool writeFaultMask(uint16_t mask) {
+bool writeFaultMask(uint16_t mask, uint8_t type) {
   Wire2.beginTransmission(0x40);
   Wire2.write(I2C_CMD_FAULT_MASK);
   Wire2.write((uint8_t)(mask & 0xFF));
   Wire2.write((uint8_t)(mask >> 8));
+  Wire2.write(type);
   return Wire2.endTransmission() == 0;
 }
 

@@ -9,6 +9,7 @@ float gapArrays[NUM_PATTERNS][STRIDE_GAPS];
 int stepperSpeed = 0;
 volatile uint8_t i2cCommand = 0;
 volatile uint16_t faultMaskRx = 0;
+volatile uint8_t faultTypeRx = 0;
 volatile bool faultMaskNew = false;
 
 // Variables used for stepper control

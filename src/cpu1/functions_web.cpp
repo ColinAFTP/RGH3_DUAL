@@ -81,10 +81,10 @@ void buildStatus() {
   uint32_t now = millis();
   bool cpu2Ok = cpu2StatusMs != 0 && (now - cpu2StatusMs) < 1500;
   jp("{\"up\":%lu,\"loopMax\":%lu,\"loopAvg\":%lu,\"plc\":%d,\"home\":%d,\"target\":%d,\"fault\":%d,\"mask\":%u,"
-     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"inputs\":%u,\"relays\":%u,",
+     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"ftype\":%u,\"inputs\":%u,\"relays\":%u,",
      (unsigned long)now, (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
      ethernetClient.connected() ? 1 : 0, statusHome ? 1 : 0, statusAtTarget ? 1 : 0, statusFault ? 1 : 0,
-     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(), (unsigned)inputData, (unsigned)relayData);
+     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(), (unsigned)faultTypeRx, (unsigned)inputData, (unsigned)relayData);
   jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"pos\":[",
      cpu2Ok ? 1 : 0, (unsigned long)cpu2RxCount, (unsigned)cpu2Status.state, (unsigned)(cpu2Status.flags & 1),
      (unsigned)cpu2Status.faultMask);
@@ -217,6 +217,13 @@ void logCpu2Event(const StatusEvent& e) {
     case EVT_FAULT_RESET: logEvent("CPU2 fault reset, search home started"); break;
     case EVT_REFUSED: logEvent("CPU2 refused request: %s", reasonText(e.arg)); break;
     case EVT_IO_FAIL: logEvent("CPU2 cannot read the home sensors over I2C, pulses stopped"); break;
+    case EVT_OVERTRAVEL: {
+      char list[24] = "";
+      if (e.arg & 1) strncat(list, " S1", sizeof(list) - strlen(list) - 1);
+      if (e.arg & (1 << 9)) strncat(list, " S10", sizeof(list) - strlen(list) - 1);
+      logEvent("OVER TRAVEL FAULT, motion stopped:%s", list);
+      break;
+    }
     default: logEvent("CPU2 event %d (%d)", e.code, e.arg); break;
   }
 }
