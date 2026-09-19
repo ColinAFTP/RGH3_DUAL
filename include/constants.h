@@ -109,6 +109,11 @@ constexpr int NUM_LEFT_SPREADERS = 4;       // Spreaders 1 to 4 are left of the 
 constexpr int NUM_RIGHT_SPREADERS = 5;      // Spreaders 6 to 10 are right of the static spreader (stepper index 4 to 8, gaps 4 to 8)
 static_assert(NUM_LEFT_SPREADERS + NUM_RIGHT_SPREADERS == NUM_GAPS, "Spreader layout must add up to NUM_GAPS");
 
+// Input filter (CPU1). Each input must hold its new value for this many consecutive 1 ms samples before it counts. Removes single-sample noise
+// pulses (seen on the bench) at the cost of this many milliseconds of latency: about 0.02 mm per sample at the 1500 steps/s homing rate.
+// Set to 1 for no filtering.
+constexpr int INPUT_FILTER_SAMPLES = 3;
+
 // Home proximity sensors. They are wired to the CPU1 input shift registers (input bit = proxy number - 1).
 // Proxy 1 (bit 0) and proxy 11 (bit 10) are the left and right over travel sensors and are not used at the moment.
 // Proxy 2 to 5 are the home sensors of spreaders 1 to 4 and proxy 6 to 10 those of spreaders 6 to 10, so the sensor of stepper index i is on input bit PROXY_FIRST_BIT + i.

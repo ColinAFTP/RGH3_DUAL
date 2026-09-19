@@ -13,7 +13,8 @@
 
 // Variables used for the IO signals
 extern FastShiftIn* FSI;      // This is a pointer, not an object
-extern uint16_t inputData;
+extern uint16_t inputData;        // The 16 inputs after the glitch filter (INPUT_FILTER_SAMPLES). Everything uses this
+extern uint16_t inputDataRaw;     // The 16 inputs as sampled, before the filter (used only to log glitches)
 extern uint16_t inputDataPrevious;
 
 // Variables used for Ethernet communications

@@ -368,7 +368,7 @@ void logInputChanges() {
   static int windowCount = 0;
   static uint32_t suppressed = 0;
 
-  uint16_t now = inputData & WATCH;
+  uint16_t now = inputDataRaw & WATCH;                 // The raw samples, before the filter
   if (!started) {                                       // The first sample only sets the reference
     started = true;
     last = now;
@@ -410,7 +410,8 @@ void logInputChanges() {
   if (windowCount < 10) {
     windowCount++;
     if (glitch) {
-      logEvent("Input glitch: %s for %lu us", list, (unsigned long)dt);
+      // A glitch shorter than the filter time never reaches the rest of the firmware
+      logEvent(dt < (uint32_t)INPUT_FILTER_SAMPLES * 1000 ? "Input glitch (filtered out): %s for %lu us" : "Input glitch: %s for %lu us", list, (unsigned long)dt);
     } else {
       logEvent("Input change: %s", list);
     }

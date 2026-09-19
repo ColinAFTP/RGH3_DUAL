@@ -30,15 +30,41 @@ void initCPU1HardIO() {
 
 // Update the inputs
 void inputsCheck() {
+  static bool started = false;
+  static uint8_t holdCount[16];         // Consecutive samples for which each input has differed from its filtered value
+
   // Pulse the load pin to load the current inputs into the shift registers
   digitalWrite(INPUTS_DATA_LOAD_PIN, LOW);
   delayMicroseconds(5);
   digitalWrite(INPUTS_DATA_LOAD_PIN, HIGH);
   delayMicroseconds(5);
   // Load the bits from the shift registers using the FastShiftIn library
-  inputData = FSI->read16();
+  uint16_t raw = FSI->read16();
   // Invert the inputs because there are pull-up resistors
-  inputData = ~inputData;
+  raw = ~raw;
+  inputDataRaw = raw;
+
+  if (!started) {
+    // The first sample is taken as it is, so start up is not delayed
+    started = true;
+    inputData = raw;
+    return;
+  }
+
+  // Glitch filter: an input changes only after its raw value has been different from the filtered value for
+  // INPUT_FILTER_SAMPLES samples in a row. A single-sample noise pulse never gets through.
+  uint16_t filtered = inputData;
+  for (int b = 0; b < 16; b++) {
+    bool rawBit = (raw >> b) & 1;
+    bool filteredBit = (filtered >> b) & 1;
+    if (rawBit == filteredBit) {
+      holdCount[b] = 0;
+    } else if (++holdCount[b] >= INPUT_FILTER_SAMPLES) {
+      filtered ^= (uint16_t)1 << b;
+      holdCount[b] = 0;
+    }
+  }
+  inputData = filtered;
 }
 
 // This subroutine clocks data serially to the 74HC595 chips. There are 2 in series so that 16 relays can be controlled at the same time. 

@@ -5,6 +5,7 @@
 // Variables used for the IO signals
 FastShiftIn* FSI = nullptr;
 uint16_t inputData = 0;
+uint16_t inputDataRaw = 0;
 uint16_t inputDataPrevious = 0;
 
 // Variables used for comms
