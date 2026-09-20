@@ -10,7 +10,7 @@ constexpr int ADDR_INPUTS = 103;
 constexpr int ADDR_PATTERN = 104;             // PLC selects the gripper position: 0 = go HOME, 1 to NUM_PATTERNS = gap pattern n (register block n-1 below)
 constexpr int ADDR_SPEED = 105;
 constexpr int ADDR_RELAYS = 106;              // Each of the first 16 bits corresponds to the switching of the 16 relays
-constexpr int ADDR_MANUAL_PTR = 107;          // Pointer to which spreader will be moved in manual mode (1-9)
+constexpr int ADDR_MANUAL_PTR = 107;          // Manual mode: the spreader to move, as its physical number 1 to 10 (5 is the static spreader and is refused)
 constexpr int ADDR_FAULT_SPREADERS = 108;     // Bitmask of the spreaders that failed to home. Bit (n-1) is spreader n (spreader 5 is static so bit 4 is never set). Read only from the PLC. Cleared by a fault reset.
 constexpr int ADDR_FAULT_TYPE = 109;          // Fault type (FAULT_NONE, FAULT_HOMING, FAULT_OVERTRAVEL or FAULT_CPU2). For FAULT_OVERTRAVEL the bit in ADDR_FAULT_SPREADERS is spreader 1 (left) or 10 (right). Read only from the PLC
 constexpr int ADDR_REFUSED_REASON = 110;      // Why the last request was refused (EVT_REASON_ constants, 0 = not refused). Valid while the Move Refused status bit is on. Read only from the PLC
@@ -72,18 +72,18 @@ constexpr int ADDR_PATTERN_4_8 = 159;
 constexpr int ADDR_PATTERN_4_9 = 160;
 
 // Modbus coil address constant
-const int ADDR_HOMING = 101;            // Homing procedure requested by PLC
+const int ADDR_HOMING = 101;            // Homing in progress. Written by CPU1 (1 while CPU2 is homing in any stage, including power up and fault reset homing), read by the PLC. Not a request
 const int ADDR_GAP_UPDATE = 102;        // Update all the gap patterns
 const int ADDR_RELAY_TEST = 103;        // Run the relay test routine
-const int ADDR_MANUAL = 104;            // Manual mode request from PLC to move spreaders
-const int ADDR_MANUAL_OPN = 105;        // Manual move spreader in open direction
-const int ADDR_MANUAL_CLS = 106;        // Manual move spreader in close direction
+const int ADDR_MANUAL = 104;            // Manual mode request from the PLC. Works together with the manual DIP switch (either one is enough, the DIP switch overrides the PLC)
+const int ADDR_MANUAL_OPN = 105;        // Manual mode: move the spreader in ADDR_MANUAL_PTR forward (open) while this coil is on
+const int ADDR_MANUAL_CLS = 106;        // Manual mode: move the spreader in ADDR_MANUAL_PTR backward (close) while this coil is on
 const int ADDR_FAULT_RESET = 107;       // PLC sets this to reset a fault. CPU1 clears it again and pulses OUTPUT_A3 so CPU2 clears its fault and starts a search home
 
 // Modbus status address constants (discrete inputs, read only from the PLC)
 const int ADDR_HOME = 117;              // Gripper is home: all nine home proximity sensors (proxy 2 to 10) are on and there is no fault. Calculated live by CPU1
 const int ADDR_MOVE_DONE = 118;         // At target: the requested pattern move or homing has finished. Off while a move or homing is running
-const int ADDR_MANUAL_MODE = 119;       // Gripper is in manual mode
+const int ADDR_MANUAL_MODE = 119;       // Manual mode is active (CPU2 has stopped, and takes jog commands). Also reported on the web page in orange
 const int ADDR_HOMING_FAULT = 120;      // Fault is active (a spreader failed to home, or an over travel sensor stopped the motion). ADDR_FAULT_TYPE says which, ADDR_FAULT_SPREADERS which spreaders. Cleared with ADDR_FAULT_RESET
 const int ADDR_MOVE_REFUSED = 121;      // The last request (pattern selection) was refused, see ADDR_REFUSED_REASON. Cleared by the next valid pattern change. At Target stays off for a refused request
 const int ADDR_CPU2_ONLINE = 122;       // CPU2 (the motion controller) is running and reporting to CPU1. If it stops, Fault (ADDR_HOMING_FAULT) turns on with fault type FAULT_CPU2
@@ -213,6 +213,7 @@ constexpr int EVT_REASON_BAD_PATTERN = 4;               // Invalid pattern recei
 constexpr int EVT_REASON_NO_GAPS = 5;                   // Could not refresh the gap data from CPU1
 constexpr int EVT_REASON_BAD_TARGETS = 6;               // Targets outside the rack travel
 constexpr int EVT_REASON_HOME_FAILED = 7;               // Home request failed
+constexpr int EVT_REASON_MANUAL = 8;                    // Manual mode is on: pattern and home requests are refused
 
 // CPU1 pin numbers
 // ================
@@ -228,7 +229,7 @@ constexpr int INPUTS_DATA_CLOCK_PIN = 7;      // CP
 
 // Hardwired IO signal pins between CPU1 and CPU2. A pins are CPU1 outputs (wired to the CPU2 INPUT_A pins), B pins are CPU2 outputs (wired to the CPU1 INPUT_B pins).
 constexpr int OUTPUT_A1 = 33;                 // Start move: CPU1 holds this high for 500 ms when the PLC changes the pattern (register 104). CPU2 acts on the rising edge and reads the pattern over I2C. Pattern 0 means go home
-constexpr int OUTPUT_A2 = 32;                 // Manual mode enabled (not implemented yet)
+constexpr int OUTPUT_A2 = 32;                 // Manual DIP switch: CPU1 holds this high while the manual mode DIP switch is on (see DIP_MANUAL_PIN)
 constexpr int OUTPUT_A3 = 31;                 // Fault reset: CPU1 pulses this high for 100 ms when the PLC sets the fault reset coil. CPU2 clears its homing fault on the rising edge and starts a search home
 constexpr int OUTPUT_A4 = 30;                 // Over travel: CPU1 holds this high while an over travel sensor (proxy 1 or 11) is on. CPU2 stops the motion and raises a fault. Only used when OVERTRAVEL_ENABLED
 constexpr int INPUT_B1 = 29;                  // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors
@@ -240,6 +241,50 @@ constexpr int INPUT_B4 = 26;                  // Request refused: high after CPU
 constexpr int DIP_SW1 = 39;
 constexpr int DIP_SW2 = 40;
 constexpr int DIP_SW3 = 41;
+
+// Manual mode (see functions_manual.cpp on CPU2). Manual mode is on while the manual DIP switch is on OR the PLC has set coil ADDR_MANUAL.
+// The DIP switch overrides the PLC: it stops any motion at once, and the PLC cannot leave manual mode while the switch is on.
+// In manual mode the PLC moves ONE spreader at a time: holding register ADDR_MANUAL_PTR = spreader number (1 to 10, not 5), coil ADDR_MANUAL_OPN
+// moves it forward (open) and coil ADDR_MANUAL_CLS backward (close), for as long as the coil is on. Spreaders further out that are touching it are pushed along.
+// Leaving manual mode starts an automatic home. Pattern requests are refused while manual mode is on.
+constexpr int DIP_MANUAL_PIN = DIP_SW3;                 // The manual mode DIP switch (CPU1)
+constexpr int DIP_MANUAL_ACTIVE_LEVEL = 1;              // Pin level when the switch is ON: 1 = HIGH, 0 = LOW. Change to 0 if the switch is wired the other way round
+constexpr uint32_t DIP_DEBOUNCE_MS = 30;                // The DIP switch must be stable this long before it counts
+constexpr int MANUAL_PULSE_RATE = 1500;                 // Manual movement speed in steps/s (direct pulses, same engine as homing)
+constexpr int MANUAL_START_RATE = 400;                  // Speed when a spreader starts moving, in steps/s
+constexpr int MANUAL_RAMP_MS = 80;                      // Time to ramp from the start rate to the manual rate. Stopping is always instant
+constexpr uint32_t MANUAL_COMM_TIMEOUT_MS = 1000;       // CPU1 cancels any manual movement if the PLC has sent no Modbus request for this long (dead man)
+constexpr uint32_t MANUAL_POLL_IDLE_MS = 25;            // CPU2 asks CPU1 for the manual command this often while nothing is moving (every loop pass while moving)
+constexpr int MANUAL_MAX_JOG_STEPS = MAX_STEPS + 500;   // One jog stops after this many pulses per stepper (guards against a failed home sensor)
+constexpr uint8_t I2C_CMD_MANUAL = 6;                   // Request: a ManualCommand (see structures.h): mode switches, coils, spreader, and the 16 bit input word
+
+// Bits of ManualCommand.flags
+constexpr uint8_t MANUAL_FLAG_DIP = 1;                  // The manual DIP switch is on
+constexpr uint8_t MANUAL_FLAG_SOFT = 2;                 // The PLC has requested manual mode (coil ADDR_MANUAL)
+constexpr uint8_t MANUAL_FLAG_OPEN = 4;                 // Move forward (open) requested (coil ADDR_MANUAL_OPN), already cancelled when the PLC is silent
+constexpr uint8_t MANUAL_FLAG_CLOSE = 8;                // Move backward (close) requested (coil ADDR_MANUAL_CLS), already cancelled when the PLC is silent
+
+// Bits of StatusPacket.flags
+constexpr uint8_t STATUS_FLAG_KNOWN = 1;                // Stepper positions are known (homed)
+constexpr uint8_t STATUS_FLAG_HOMING = 2;               // CPU2 is homing (any stage). CPU1 shows this to the PLC in coil ADDR_HOMING
+constexpr uint8_t STATUS_FLAG_MANUAL = 4;               // CPU2 is in manual mode
+
+constexpr uint8_t STATE_MANUAL = 6;                     // CPU2 state: manual mode active
+
+constexpr uint8_t EVT_MANUAL_ON = 16;                   // Manual mode started. Arg: 1 = DIP switch, 2 = PLC, 3 = both
+constexpr uint8_t EVT_MANUAL_OFF = 17;                  // Manual mode ended (an automatic home follows)
+constexpr uint8_t EVT_JOG_START = 18;                   // Spreader started moving. Arg = spreader number + 100 (open) or + 200 (close)
+constexpr uint8_t EVT_JOG_STOP = 19;                    // All spreaders stopped. Arg = EVT_JOG_ constant
+constexpr uint8_t EVT_MOVE_ABORTED = 20;                // A move or homing was stopped by the manual DIP switch
+constexpr uint8_t EVT_MANUAL_BAD_SPREADER = 21;         // Manual movement requested for an invalid spreader (5 is static). Arg = the number
+constexpr uint8_t EVT_AUTO_HOME_SKIPPED = 22;           // No automatic home after manual mode because a fault is active
+
+constexpr int EVT_JOG_RELEASED = 0;                     // The coil was released
+constexpr int EVT_JOG_TOUCHING = 1;                     // Closing: the spreader is up against its neighbour (home sensor on)
+constexpr int EVT_JOG_LIMIT = 2;                        // Travel limit reached
+constexpr int EVT_JOG_OVERTRAVEL = 3;                   // An over travel sensor is on
+constexpr int EVT_JOG_LINK = 4;                         // CPU2 could not read the manual command from CPU1
+constexpr int EVT_JOG_MODE_END = 5;                     // Manual mode ended
 
 // CPU2 pin numbers
 // ================
@@ -271,7 +316,7 @@ constexpr int STEPPER12_DIR_PIN = 27;
 
 // Hardwired IO signal pins between CPU1 and CPU2 (see the CPU1 pin descriptions above). These are pulled down so a disconnected wire cannot cause false triggers.
 constexpr int INPUT_A1 = 23;                  // Start move: CPU2 acts on the rising edge, reads the pattern over I2C. Pattern 0 means go home
-constexpr int INPUT_A2 = 17;                  // Manual mode enabled (not implemented yet)
+constexpr int INPUT_A2 = 17;                  // Manual DIP switch: high while the manual mode DIP switch is on. CPU2 stops any motion at once and enters manual mode
 constexpr int INPUT_A3 = 18;                  // Fault reset: rising edge clears the homing fault and starts a search home
 constexpr int INPUT_A4 = 19;                  // Over travel: high while an over travel sensor is on (level, not an edge). Ignored during the direct pulse homing stage
 constexpr int OUTPUT_B1 = 20;                 // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors

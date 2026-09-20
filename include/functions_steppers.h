@@ -10,5 +10,8 @@ bool triggerMove();                     // Start a non-blocking TeensyStep move 
 bool moveService();                     // Call every loop: returns true once when a move has just finished
 bool moveInProgress();
 void emergencyStopMoves();              // Stop a running TeensyStep move at once, without deceleration (over travel protection)
+void stopMovesRamped();                 // Stop a running TeensyStep move with the normal deceleration (manual DIP switch)
+bool moveWasAborted();                  // True if the move that moveService() has just reported was stopped early
+void setStepperPosition(int i, long position);   // Tell TeensyStep where stepper i is
 
 #endif

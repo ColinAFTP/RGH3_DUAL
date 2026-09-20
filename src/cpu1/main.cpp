@@ -5,6 +5,7 @@
 #include "functions_comms.h"
 #include "functions_i2c.h"
 #include "functions_io.h"
+#include "functions_manual_cpu1.h"
 #include "functions_web.h"
 #include "functions_watchdog.h"
 #include "variables_cpu1.h"
@@ -59,6 +60,7 @@ void setup()
   // Call initialisation routines
   initShiftRegisters();
   initCPU1HardIO();
+  manualInit();                       // Reads the manual DIP switch and puts it on the line to CPU2 before CPU2 starts
 
   // Indicate that gap patterns should be loaded from the PLC on startup
   bootLoadGaps = true;
@@ -146,8 +148,18 @@ void loop()
     plcWasConnected = plcConnected;
   }
 
+  // Manual mode: the DIP switch, the PLC request, the jog commands for CPU2, coil 101 and DI 119
+  manualCpu1Service();
+
   // Check for new pattern requests
   patternCheck();
+  if (patternSelection != patternSelectionPrevious && manualModeOn()) {
+    // Manual mode is on: the request is refused and forgotten. After manual mode CPU2 homes by itself, and the PLC sends a new request.
+    cpu1Refused = true;
+    cpu1RefusedReason = EVT_REASON_MANUAL;
+    logEvent("PLC pattern request %d refused: manual mode is on", patternSelection);
+    patternSelectionPrevious = patternSelection;
+  }
   if (patternSelection != patternSelectionPrevious) {
 
     Serial.print("   | Current pattern: ");

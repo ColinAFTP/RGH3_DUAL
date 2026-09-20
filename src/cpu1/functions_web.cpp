@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "constants.h"
+#include "functions_manual_cpu1.h"
 #include "functions_web.h"
 #include "variables_cpu1.h"
 #include "web_page.h"
@@ -91,7 +92,10 @@ void buildStatus() {
   for (int i = 0; i < NUM_GAPS; i++) {
     jp("%s%d", i ? "," : "", (int)cpu2Status.positions[i]);
   }
-  jp("]}}");
+  jp("]}");
+  jp(",\"manual\":{\"active\":%d,\"dip\":%d,\"soft\":%d,\"spr\":%u,\"open\":%d,\"close\":%d}}",
+     manualCpu2Active() ? 1 : 0, manualDipOn() ? 1 : 0, manualSoftOn() ? 1 : 0, (unsigned)manualSpreader(),
+     (manualOpenClose() & 1) ? 1 : 0, (manualOpenClose() & 2) ? 1 : 0);
 }
 
 // Gaps in tenths of a millimetre
@@ -184,6 +188,7 @@ const char* reasonText(int reason) {
     case EVT_REASON_NO_GAPS: return "could not refresh gap data";
     case EVT_REASON_BAD_TARGETS: return "targets outside the rack travel";
     case EVT_REASON_HOME_FAILED: return "home request failed";
+    case EVT_REASON_MANUAL: return "manual mode is on";
     default: return "unknown reason";
   }
 }
@@ -218,6 +223,19 @@ void logCpu2Event(const StatusEvent& e) {
     case EVT_REFUSED: logEvent("CPU2 refused request: %s", reasonText(e.arg)); break;
     case EVT_IO_FAIL: logEvent("CPU2 cannot read the home sensors over I2C, pulses stopped"); break;
     case EVT_PULSE_TIMEOUT: logEvent("CPU2 homing pulses stopped: sensor data too old (main loop stalled)"); break;
+    case EVT_MANUAL_ON: logEvent("CPU2 MANUAL MODE ON (%s)", e.arg == 1 ? "DIP switch" : e.arg == 2 ? "PLC request" : "DIP switch and PLC request"); break;
+    case EVT_MANUAL_OFF: logEvent("CPU2 manual mode off, automatic home starts"); break;
+    case EVT_JOG_START: logEvent("CPU2 jog started: spreader %d %s", e.arg % 100, e.arg >= 200 ? "closing" : "opening"); break;
+    case EVT_JOG_STOP: {
+      const char* why = e.arg == EVT_JOG_RELEASED ? "coil released" : e.arg == EVT_JOG_TOUCHING ? "touching its neighbour (home sensor on)" :
+                        e.arg == EVT_JOG_LIMIT ? "travel limit" : e.arg == EVT_JOG_OVERTRAVEL ? "over travel sensor on" :
+                        e.arg == EVT_JOG_LINK ? "CPU2 cannot read the manual command" : "manual mode ended";
+      logEvent("CPU2 jog stopped: %s", why);
+      break;
+    }
+    case EVT_MOVE_ABORTED: logEvent("CPU2 move or homing stopped by the manual DIP switch"); break;
+    case EVT_MANUAL_BAD_SPREADER: logEvent("CPU2 manual: spreader %d cannot be moved (spreader 5 is static)", e.arg); break;
+    case EVT_AUTO_HOME_SKIPPED: logEvent("CPU2: no automatic home after manual mode, a fault is active (reset it first)"); break;
     case EVT_OVERTRAVEL: {
       char list[24] = "";
       if (e.arg & 1) strncat(list, " S1", sizeof(list) - strlen(list) - 1);
@@ -457,4 +475,9 @@ bool cpu2Lost() {
 // Why CPU2 refused the last request (0 = not refused), from its last status
 uint8_t cpu2RefusedReason() {
   return cpu2Status.refusedReason;
+}
+
+// The flags of CPU2's last status (STATUS_FLAG_ bits). Only meaningful while cpu2Online().
+uint8_t cpu2Flags() {
+  return cpu2Status.flags;
 }

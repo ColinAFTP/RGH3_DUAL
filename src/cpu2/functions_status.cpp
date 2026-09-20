@@ -5,6 +5,7 @@
 #include "constants.h"
 #include "functions_homing.h"
 #include "functions_i2c.h"
+#include "functions_manual.h"
 #include "functions_status.h"
 #include "functions_steppers.h"
 #include "structures.h"
@@ -21,6 +22,7 @@ uint8_t refusedReason = 0;              // Reason the last request was refused, 
 
 // The state that is reported to CPU1
 uint8_t currentState() {
+  if (manualActive()) return STATE_MANUAL;
   if (faultActive()) return STATE_FAULT;
   int stage = homingStage();
   if (stage == 2) return STATE_HOMING_PULSES;
@@ -60,10 +62,15 @@ void statusService() {
 
   StatusPacket packet;
   packet.state = currentState();
-  packet.flags = positionsKnown() ? 1 : 0;
+  packet.flags = (positionsKnown() ? STATUS_FLAG_KNOWN : 0) | (homingBusy() ? STATUS_FLAG_HOMING : 0) | (manualActive() ? STATUS_FLAG_MANUAL : 0);
   packet.faultMask = faultMask();
   packet.faultType = faultType();
-  if (homingStage() == 2) {
+  if (manualActive()) {
+    // Manual mode counts the pulses of the jog that is running
+    for (int i = 0; i < NUM_GAPS; i++) {
+      packet.positions[i] = (int16_t)lroundf(manualPositionSteps(i) * 10.0f / STEPS_PER_MM);
+    }
+  } else if (homingStage() == 2) {
     // The direct pulse stage does not use TeensyStep, so its positions are estimated from the pulses counted
     for (int i = 0; i < NUM_GAPS; i++) {
       packet.positions[i] = (int16_t)lroundf(cascadePositionSteps(i) * 10.0f / STEPS_PER_MM);

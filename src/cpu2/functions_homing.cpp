@@ -3,30 +3,21 @@
 #include "constants.h"
 #include "functions_homing.h"
 #include "functions_i2c.h"
+#include "functions_manual.h"
+#include "functions_pulses.h"
 #include "functions_status.h"
 #include "functions_steppers.h"
+#include "spreaders.h"
 #include "variables.h"
 
 // Homing of the spreaders.
 //
-// The direct pulse routine does not use TeensyStep. One timer interrupt generates the step pulses for all nine steppers at a
-// constant rate (with a short ramp up when a stepper starts). The main loop reads the home proximity sensors from CPU1 over
-// I2C, and lets each stepper run closed (towards home) while its sensor is off. The moment a sensor goes on, its pulses stop.
-// If the sensor goes off again (the neighbour on the home side moved away) the stepper starts again, so the spreaders
-// follow each other and every spreader homes as soon as it can.
+// The direct pulse routine does not use TeensyStep. The pulse engine (functions_pulses.cpp) generates the step pulses for all nine
+// steppers. The main loop reads the home proximity sensors from CPU1 over I2C, and lets each stepper run closed (towards home) while its
+// sensor is off. The moment a sensor goes on, its pulses stop. If the sensor goes off again (the neighbour on the home side moved away)
+// the stepper starts again, so the spreaders follow each other and every spreader homes as soon as it can.
 
 namespace {
-
-// Step and direction pins of the nine steppers, in stepper index order
-const uint8_t stepPins[NUM_GAPS] = {
-  STEPPER1_PULSE_PIN, STEPPER2_PULSE_PIN, STEPPER3_PULSE_PIN, STEPPER4_PULSE_PIN, STEPPER5_PULSE_PIN,
-  STEPPER6_PULSE_PIN, STEPPER7_PULSE_PIN, STEPPER8_PULSE_PIN, STEPPER9_PULSE_PIN };
-const uint8_t dirPins[NUM_GAPS] = {
-  STEPPER1_DIR_PIN, STEPPER2_DIR_PIN, STEPPER3_DIR_PIN, STEPPER4_DIR_PIN, STEPPER5_DIR_PIN,
-  STEPPER6_DIR_PIN, STEPPER7_DIR_PIN, STEPPER8_DIR_PIN, STEPPER9_DIR_PIN };
-
-// TeensyStep drives the direction pin HIGH for the positive (open) direction and LOW for the negative (close) direction
-constexpr int DIR_CLOSE = LOW;
 
 enum HomeState { HOME_IDLE, HOME_APPROACH, HOME_CASCADE };
 HomeState homeState = HOME_IDLE;
@@ -39,78 +30,14 @@ bool maskPublished = true;              // False while the mask still has to be 
 uint32_t lastPublishTry = 0;
 int ioFailCount = 0;
 uint32_t cascadeStartTime = 0;
-
-// Direct pulse generation. The timer interrupt only reads runFlag and updates the rest.
-IntervalTimer pulseTimer;
-volatile bool runFlag[NUM_GAPS];        // Set by the main loop: this stepper should be running now
-volatile uint32_t pulseCount[NUM_GAPS]; // Pulses emitted per stepper since the direct pulse routine started
-volatile uint32_t lastSensorReadUs = 0; // micros() of the last good sensor read. The interrupt stops all pulses if it gets older than HOME_SENSOR_TIMEOUT_US
-volatile bool pulseStale = false;       // Set by the interrupt when it stopped the pulses for old sensor data. The main loop reports it and clears it
+bool tsHomeMove = false;                // A TeensyStep only home move is running (HOME_APPROACH_MM = 0)
 long cascadeStartPos[NUM_GAPS];         // Stepper positions when the direct pulse stage started
 bool cascadeStartKnown = false;         // ...and whether they were trustworthy
-float curRate[NUM_GAPS];                // Current pulse rate in steps/s (interrupt only)
-float phaseAcc[NUM_GAPS];               // Step phase accumulator, a pulse is emitted each time it passes 1.0 (interrupt only)
-bool pinHigh[NUM_GAPS];                 // Step pin is currently high (interrupt only)
-
-// The bit of stepper index i in the failed spreader bitmask: bit (spreader number - 1)
-uint16_t spreaderBit(int i) {
-  return (uint16_t)1 << (i < NUM_LEFT_SPREADERS ? i : i + 1);
-}
 
 uint16_t allSpreadersMask() {
   uint16_t m = 0;
   for (int i = 0; i < NUM_GAPS; i++) m |= spreaderBit(i);
   return m;
-}
-
-// Timer interrupt: called every HOME_TICK_US
-void pulseISR() {
-  constexpr float tick = HOME_TICK_US * 1e-6f;
-  constexpr float rampPerTick = (float)(HOME_PULSE_RATE - HOME_START_RATE) / ((float)HOME_RAMP_MS * 1000.0f / HOME_TICK_US);
-
-  // Never pulse on old data: if the main loop has not confirmed the sensors recently, everything stops (and restarts with the ramp)
-  bool stale = (uint32_t)(micros() - lastSensorReadUs) > HOME_SENSOR_TIMEOUT_US;
-  if (stale) pulseStale = true;
-
-  for (int i = 0; i < NUM_GAPS; i++) {
-    // End the pulse started on the previous tick
-    if (pinHigh[i]) {
-      digitalWrite(stepPins[i], LOW);
-      pinHigh[i] = false;
-    }
-    if (runFlag[i] && !stale) {
-      // Ramp up to the homing rate
-      if (curRate[i] < HOME_PULSE_RATE) {
-        curRate[i] += rampPerTick;
-        if (curRate[i] > HOME_PULSE_RATE) curRate[i] = HOME_PULSE_RATE;
-      }
-      phaseAcc[i] += curRate[i] * tick;
-      if (phaseAcc[i] >= 1.0f) {
-        phaseAcc[i] -= 1.0f;
-        digitalWrite(stepPins[i], HIGH);
-        pinHigh[i] = true;
-        pulseCount[i] = pulseCount[i] + 1;
-      }
-    } else {
-      // Stopped: the next start begins at the start rate, with the first pulse right away
-      curRate[i] = HOME_START_RATE;
-      phaseAcc[i] = 0.999f;
-    }
-  }
-}
-
-void stopAllRunning() {
-  for (int i = 0; i < NUM_GAPS; i++) runFlag[i] = false;
-}
-
-// Stop the timer and leave every step pin low
-void endPulses() {
-  pulseTimer.end();
-  stopAllRunning();
-  for (int i = 0; i < NUM_GAPS; i++) {
-    digitalWrite(stepPins[i], LOW);
-    pinHigh[i] = false;
-  }
 }
 
 void publishMask() {
@@ -122,8 +49,9 @@ void publishMask() {
 }
 
 void raiseFault(uint16_t mask, uint8_t type = FAULT_HOMING) {
-  endPulses();
+  pulsesEnd();
   homeState = HOME_IDLE;
+  tsHomeMove = false;
   faultOn = true;
   posKnown = false;
   faultMaskValue = mask;
@@ -137,34 +65,23 @@ void raiseFault(uint16_t mask, uint8_t type = FAULT_HOMING) {
   publishMask();
 }
 
-// Start the direct pulse routine: every stepper is pointed in the close direction, the timer starts, and
+// Start the direct pulse routine: every stepper is pointed in the close direction, the engine starts, and
 // the main loop decides which steppers actually run from the sensors.
 void beginCascade() {
-  for (int i = 0; i < NUM_GAPS; i++) {
-    runFlag[i] = false;
-    pulseCount[i] = 0;
-    curRate[i] = HOME_START_RATE;
-    phaseAcc[i] = 0.999f;
-    pinHigh[i] = false;
-    digitalWrite(dirPins[i], DIR_CLOSE);
-  }
   updateStepperPositions();
   for (int i = 0; i < NUM_GAPS; i++) cascadeStartPos[i] = stepperPositions[i];
   cascadeStartKnown = posKnown;
-  pulseStale = false;
-  lastSensorReadUs = micros();
-  delayMicroseconds(10);                // Direction setup time before the first pulse
   ioFailCount = 0;
   cascadeStartTime = millis();
   digitalWrite(OUTPUT_B2, LOW);
   homeState = HOME_CASCADE;
-  pulseTimer.begin(pulseISR, HOME_TICK_US);
+  pulsesBegin(HOME_PULSE_RATE, HOME_START_RATE, HOME_RAMP_MS);
   Serial.println("Homing: direct pulse routine started.");
   statusEvent(EVT_HOME_PULSES);
 }
 
 void completeHoming() {
-  endPulses();
+  pulsesEnd();
   setAllStepperPositions(0);
   posKnown = true;
   homeState = HOME_IDLE;
@@ -179,14 +96,14 @@ void cascadeStep() {
     static uint32_t lastStall = 0;
     if (millis() - lastStall > 1000) {
       lastStall = millis();
-      delay(40);                        // TEST ONLY: longer than HOME_SENSOR_TIMEOUT_US, so the interrupt must stop the pulses
+      delay(40);                        // TEST ONLY: longer than HOME_SENSOR_TIMEOUT_US, so the engine must stop the pulses
     }
   }
 
   int io = readIO();
   if (io < 0) {
     // Never move blind: stop until the sensors can be read again
-    stopAllRunning();
+    pulsesStopAll();
     if (++ioFailCount == 1) statusEvent(EVT_IO_FAIL);
     if (ioFailCount >= HOME_IO_FAIL_LIMIT) {
       raiseFault(allSpreadersMask());
@@ -194,9 +111,8 @@ void cascadeStep() {
     return;
   }
   ioFailCount = 0;
-  lastSensorReadUs = micros();
-  if (pulseStale) {
-    pulseStale = false;
+  pulsesDataFresh();
+  if (pulsesTakeStale()) {
     statusEvent(EVT_PULSE_TIMEOUT);
   }
 
@@ -205,11 +121,11 @@ void cascadeStep() {
   uint16_t notOn = 0;
   for (int i = 0; i < NUM_GAPS; i++) {
     bool on = (io >> (PROXY_FIRST_BIT + i)) & 1;
-    runFlag[i] = !on;
+    pulsesRun(i, !on);
     if (!on) {
       allOn = false;
       notOn |= spreaderBit(i);
-      if (pulseCount[i] > (uint32_t)HOME_MAX_STEPS) failed |= spreaderBit(i);
+      if (pulsesCount(i) > (uint32_t)HOME_MAX_STEPS) failed |= spreaderBit(i);
     }
   }
 
@@ -237,6 +153,12 @@ void homingStartup() {
   if (io < 0) {
     Serial.println("Homing: CPU1 did not answer over I2C at power up.");
     raiseFault(allSpreadersMask());
+    return;
+  }
+
+  if (digitalRead(INPUT_A2)) {
+    // The manual DIP switch is on: start in manual mode without moving anything. Leaving manual mode homes automatically.
+    Serial.println("Power up with the manual DIP switch on: no automatic home.");
     return;
   }
 
@@ -270,7 +192,8 @@ bool homeRequest() {
     // TeensyStep all the way to position 0, no direct pulse stage
     statusEvent(EVT_HOME_START, 0);
     if (!stepTargetCalc(0)) return false;
-    return triggerMove();
+    tsHomeMove = triggerMove();
+    return tsHomeMove;
   }
 
   // TeensyStep to HOME_APPROACH_MM from home (steppers already closer stay where they are), then the direct pulse routine
@@ -295,6 +218,8 @@ void homingService(bool moveFinished) {
     publishMask();
   }
 
+  if (moveFinished) tsHomeMove = false;
+
   switch (homeState) {
     case HOME_APPROACH:
       if (moveFinished) beginCascade();
@@ -307,12 +232,37 @@ void homingService(bool moveFinished) {
   }
 }
 
+// Cancel a homing routine that is running (the manual DIP switch was turned on). A TeensyStep move that is part of it must be stopped by the caller.
+// The positions the pulses have brought about are kept if they were known when the routine started.
+void homingAbort() {
+  if (homeState == HOME_CASCADE) {
+    if (cascadeStartKnown) {
+      for (int i = 0; i < NUM_GAPS; i++) setStepperPosition(i, cascadePositionSteps(i));
+    } else {
+      posKnown = false;
+    }
+    pulsesEnd();
+  }
+  homeState = HOME_IDLE;
+  tsHomeMove = false;
+  digitalWrite(OUTPUT_B2, LOW);
+  statusEvent(EVT_MOVE_ABORTED, 1);
+}
+
 bool homingActive() {
   return homeState != HOME_IDLE;
 }
 
+bool homingBusy() {
+  return homeState != HOME_IDLE || tsHomeMove;
+}
+
 bool positionsKnown() {
   return posKnown;
+}
+
+void setPositionsKnown(bool known) {
+  posKnown = known;
 }
 
 bool faultActive() {
@@ -333,9 +283,10 @@ void faultReset() {
 }
 
 // Over travel protection. CPU1 holds INPUT_A4 high while an over travel sensor is on. Stop the TeensyStep motion at once and raise a fault.
-// Not checked during the direct pulse stage: homing closes the spreaders, which moves them away from the sensors.
+// Not checked during the direct pulse stage (homing closes the spreaders, which moves them away from the sensors) or in manual mode
+// (manual mode blocks opening the end spreaders itself).
 void overTravelService() {
-  if (!OVERTRAVEL_ENABLED || faultOn || homeState == HOME_CASCADE) return;
+  if (!OVERTRAVEL_ENABLED || faultOn || homeState == HOME_CASCADE || manualRequested()) return;
   if (!digitalRead(INPUT_A4)) return;
 
   emergencyStopMoves();
@@ -369,6 +320,6 @@ uint8_t faultType() {
 
 long cascadePositionSteps(int i) {
   if (!cascadeStartKnown) return 0;
-  long p = cascadeStartPos[i] - (long)pulseCount[i];
+  long p = cascadeStartPos[i] - (long)pulsesCount(i);
   return p < 0 ? 0 : p;
 }

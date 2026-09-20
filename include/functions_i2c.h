@@ -2,6 +2,7 @@
 #define FUNCTIONS_I2C_H
 
 #include <stdint.h>
+#include "structures.h"
 
 // CPU1 (I2C slave), see src/cpu1/functions_i2c_cpu1.cpp
 void copyToTransmitData();
@@ -11,6 +12,7 @@ void onI2CRequest();
 void copyFromReceiveData();
 int readIO();                           // Returns the 16 bit input word from CPU1, or -1 if the transfer failed
 bool writeFaultMask(uint16_t mask, uint8_t type);   // Sends the failed spreader bitmask and the fault type to CPU1. Returns false if the transfer failed
+bool readManualCommand(ManualCommand& out);   // Reads the manual command from CPU1. Returns false if the transfer failed
 int readPattern();                      // Returns the pattern selection (0 = home) from CPU1, or -1 if the transfer failed
 bool readGapPatterns();                 // Returns false if the I2C transfer failed (old data kept)
 void i2cCountOtherFail();               // Count a failed I2C transfer made outside this file (status packet)

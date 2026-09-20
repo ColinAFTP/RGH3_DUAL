@@ -15,5 +15,6 @@ uint32_t inputGlitches();               // Number of input glitches seen since s
 bool cpu2Online();                      // CPU2 is sending its status (it is running)
 bool cpu2Lost();                        // CPU2 stopped reporting, or never reported within the boot grace time: this is a fault
 uint8_t cpu2RefusedReason();            // Why CPU2 refused the last request (EVT_REASON_ constant, 0 = not refused)
+uint8_t cpu2Flags();                    // The STATUS_FLAG_ bits of CPU2's last status (positions known, homing, manual mode)
 
 #endif

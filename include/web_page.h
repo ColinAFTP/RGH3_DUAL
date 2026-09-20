@@ -16,6 +16,7 @@ h1{font-size:17px;margin:0 8px 0 0}h2{font-size:14px;margin:0 0 8px;color:var(--
 main{display:grid;grid-template-columns:1fr;gap:12px;padding:12px 16px}
 @media(min-width:760px){main{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1300px){main{grid-template-columns:repeat(4,1fr)}}
+[hidden]{display:none!important}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
 .wide{grid-column:1/-1}
 .chip{display:inline-block;padding:3px 10px;border-radius:12px;background:var(--off);color:#fff;font-weight:600;font-size:12px}
@@ -35,8 +36,8 @@ tr.act td{background:rgba(26,156,75,.13)}
 <span class="mut">CPU1 Loop <b id="loop">-</b></span></header>
 <main>
 <section class="card"><h2>Status</h2>
-<p><span class="chip" id="home">Home</span> <span class="chip" id="target">At Target</span> <span class="chip" id="fault">Fault</span> <span class="chip" id="refused">Refused</span></p>
-<table><tr><td>CPU2 State</td><td id="state">-</td></tr><tr><td>PLC Pattern</td><td id="pat">-</td></tr><tr><td>PLC Speed</td><td id="spd">-</td></tr><tr><td>Ticker</td><td id="ticker">-</td></tr><tr><td>Input Glitches</td><td id="gl">-</td></tr><tr><td>Fault Type</td><td id="ft">-</td></tr><tr><td>Refused Reason</td><td id="rr">-</td></tr><tr><td>CPU2 I2C Errors</td><td id="i2c">-</td></tr>
+<p><span class="chip" id="home">Home</span> <span class="chip" id="target">At Target</span> <span class="chip" id="fault">Fault</span> <span class="chip" id="refused">Refused</span> <span class="chip warn" id="manual" hidden>Manual</span></p>
+<table><tr><td>CPU2 State</td><td id="state">-</td></tr><tr><td>PLC Pattern</td><td id="pat">-</td></tr><tr><td>PLC Speed</td><td id="spd">-</td></tr><tr><td>Ticker</td><td id="ticker">-</td></tr><tr><td>Input Glitches</td><td id="gl">-</td></tr><tr><td>Fault Type</td><td id="ft">-</td></tr><tr><td>Manual Jog</td><td id="mj">-</td></tr><tr><td>Refused Reason</td><td id="rr">-</td></tr><tr><td>CPU2 I2C Errors</td><td id="i2c">-</td></tr>
 <tr><td>Failed Spreaders (Reg 108)</td><td id="mask">-</td></tr></table></section>
 <section class="card"><h2>Spreaders</h2><table id="sp"><tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr></table></section>
 <section class="card"><h2>Inputs (Proxies)</h2><div class="bits" id="in"></div></section>
@@ -45,7 +46,7 @@ tr.act td{background:rgba(26,156,75,.13)}
 <section class="card wide"><h2>Event Log</h2><div id="log"></div></section>
 </main>
 <script>
-const $=id=>document.getElementById(id),SP=[1,2,3,4,6,7,8,9,10],FTYPE=['None','Homing Failed','Over Travel','CPU2 Lost'],REASON=['None','Busy','Fault Active','Positions Unknown','Invalid Pattern','No Gap Data','Bad Targets','Home Failed'],STATE=['Idle','Moving','Homing: Approach','Homing: Pulses','Fault','Idle, Positions Unknown'];
+const $=id=>document.getElementById(id),SP=[1,2,3,4,6,7,8,9,10],FTYPE=['None','Homing Failed','Over Travel','CPU2 Lost'],REASON=['None','Busy','Fault Active','Positions Unknown','Invalid Pattern','No Gap Data','Bad Targets','Home Failed','Manual Mode'],STATE=['Idle','Moving','Homing: Approach','Homing: Pulses','Fault','Idle, Positions Unknown','Manual'];
 const inLbl=['P1 OT L','P2 S1','P3 S2','P4 S3','P5 S4','P6 S6','P7 S7','P8 S8','P9 S9','P10 S10','P11 OT R','In11','In12','In13','In14','In15'];
 const rlLbl=['R1 Home','R2 Target','R3','R4','R5','R6','R7','R8','R9','R10','R11','R12','R13','R14','R15','R16'];
 const chip=(id,on,cls)=>{$(id).className='chip'+(on?' '+(cls||'on'):'')};
@@ -56,7 +57,7 @@ function render(s){
  $('up').textContent=fmt(Math.floor(s.up/1000));$('loop').textContent=(s.loopAvg/1000).toFixed(2)+' ms avg, '+(s.loopMax/1000).toFixed(2)+' ms max';
  $('plc').textContent=s.plc?'Connected':'No Client';chip('plc',s.plc);
  const c=s.cpu2;$('c2').textContent=c.ok?'Online':'Offline';chip('c2',c.ok,c.ok?'on':'bad');
- chip('home',s.home);chip('target',s.target);chip('fault',s.fault,'bad');chip('refused',s.refused,'bad');
+ chip('home',s.home);chip('target',s.target);chip('fault',s.fault,'bad');chip('refused',s.refused,'bad');const m=s.manual,req=m.dip||m.soft||m.active;$('manual').hidden=!req;if(req){$('manual').textContent='Manual ('+(m.dip&&m.soft?'Switch + PLC':m.dip?'Switch':'PLC')+')'+(m.active?'':' - Waiting');}$('mj').textContent=m.active?('Spreader '+m.spr+', '+(m.open?'Opening':m.close?'Closing':'Stopped')):'-';
  $('state').textContent=c.ok?STATE[c.state]||c.state:'-';$('pat').textContent=s.pattern+(s.pattern?'':' (home)');$('spd').textContent=s.speed;$('ticker').textContent=s.tick;$('gl').textContent=s.glitches;$('ft').textContent=FTYPE[s.ftype]||s.ftype;$('rr').textContent=s.refused?(REASON[s.rreason]||s.rreason):'None';$('i2c').textContent=c.ok?(c.ioFails+c.otherFails)+' ('+c.ioFails+' of '+c.ioReads.toLocaleString()+' sensor reads)':'-';
  $('mask').textContent='0x'+s.mask.toString(16).toUpperCase();
  let h='<tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr>';

@@ -5,6 +5,7 @@
 
 #include "functions_homing.h"
 #include "functions_i2c.h"
+#include "functions_manual.h"
 #include "functions_status.h"
 #include "functions_steppers.h"
 #include "functions_watchdog.h"
@@ -91,6 +92,9 @@ void loop()
   // Over travel sensors: stop everything at once if CPU1 says one is on
   overTravelService();
 
+  // Manual mode: the DIP switch and the PLC request, and the jog commands
+  manualService();
+
   // Send the status and queued events to CPU1 for its web page
   statusService();
 
@@ -99,12 +103,15 @@ void loop()
   homingService(moveFinished);
 
   // A finished pattern move (or a TeensyStep only home) means at target. While homing, the next stage continues instead.
-  if (moveFinished && !homingActive()) {
+  if (moveFinished && moveWasAborted()) {
+    // The move was stopped by the manual DIP switch: it never reached its target, so no At Target
+    statusEvent(EVT_MOVE_ABORTED, 0);
+  } else if (moveFinished && !homingActive()) {
     statusEvent(EVT_MOVE_DONE);
     digitalWrite(OUTPUT_B2, HIGH);
   }
 
-  bool busy = moveInProgress() || homingActive();
+  bool busy = moveInProgress() || homingActive() || manualRequested();
 
   // If the stepper motors are standing still, do housekeeping
   if (!busy) {
@@ -134,7 +141,11 @@ void loop()
     // A new request: clear the "refused" flag, and At Target goes off until this request has really been carried out
     requestStarted();
     digitalWrite(OUTPUT_B2, LOW);
-    if (busy) {
+    if (manualRequested()) {
+      // Manual mode is on: pattern and home requests are refused. The PLC has to send a new request after manual mode.
+      Serial.println("Request refused: manual mode is on.");
+      requestRefused(EVT_REASON_MANUAL);
+    } else if (busy) {
       // Do nothing else: reading data or changing speeds here would disturb the running move
       Serial.println("Move requested while already moving - ignored.");
       requestRefused(EVT_REASON_BUSY);

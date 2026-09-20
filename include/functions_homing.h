@@ -17,5 +17,8 @@ void overTravelService();               // Call every loop: stops the motion and
 bool positionsKnown();                  // True once homing has set the stepper positions to 0 (and no fault has occurred since)
 bool faultActive();                     // True while a homing fault is active. Pattern moves are refused
 void faultReset();                      // Clear the homing fault and start a search home
+void homingAbort();                     // Cancel a running homing routine (manual DIP switch). A TeensyStep move that is part of it must be stopped by the caller
+bool homingBusy();                      // Homing is in progress in any stage, including a TeensyStep only home move. CPU1 shows this to the PLC in coil ADDR_HOMING
+void setPositionsKnown(bool known);     // Manual mode may declare the positions unknown
 
 #endif

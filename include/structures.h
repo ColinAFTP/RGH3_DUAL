@@ -17,7 +17,7 @@ typedef struct __attribute__((packed)) {
 // Status that CPU2 sends to CPU1 about 4 times a second (I2C_CMD_STATUS). CPU1 shows it on the web page.
 typedef struct __attribute__((packed)) {
     uint8_t state;                      // STATE_ constant
-    uint8_t flags;                      // Bit 0: stepper positions are known (homed)
+    uint8_t flags;                      // STATUS_FLAG_ bits: positions known, homing busy, manual mode active
     uint16_t faultMask;                 // Failed spreader bitmask, same as register ADDR_FAULT_SPREADERS
     uint8_t faultType;                  // FAULT_ constant, same as register ADDR_FAULT_TYPE
     int16_t positions[NUM_GAPS];        // Stepper positions in tenths of a millimetre from home
@@ -28,5 +28,13 @@ typedef struct __attribute__((packed)) {
     uint16_t ioFails;                   // ...and how many of those failed
     uint16_t otherFails;                // Failed I2C transfers of every other kind (status, gaps, pattern, fault message)
 } StatusPacket;
+
+
+// What CPU2 reads from CPU1 in manual mode (I2C_CMD_MANUAL)
+typedef struct __attribute__((packed)) {
+    uint8_t flags;                      // MANUAL_FLAG_ bits
+    uint8_t spreader;                   // Holding register ADDR_MANUAL_PTR: the spreader to move (1 to 10)
+    uint16_t inputs;                    // The 16 filtered inputs (the home sensors decide which spreaders are pushed along)
+} ManualCommand;
 
 #endif

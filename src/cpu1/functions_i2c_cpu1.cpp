@@ -28,6 +28,14 @@ void onI2CRequest() {
         copyToTransmitData();
         Wire2.write((byte*)&transmitPacket, sizeof(transmitPacket));
     }
+    else if (i2cCommand == I2C_CMD_MANUAL) {
+        // The manual command: mode switches, jog coils, spreader, and the inputs the push-along logic needs
+        ManualCommand mc;
+        mc.flags = manualFlagsShared;
+        mc.spreader = manualSpreaderShared;
+        mc.inputs = inputData;
+        Wire2.write((byte*)&mc, sizeof(mc));
+    }
     else if (i2cCommand == I2C_CMD_PATTERN) {
         // Send pattern selection
         Wire2.write((byte*)&patternSelection, sizeof(patternSelection));

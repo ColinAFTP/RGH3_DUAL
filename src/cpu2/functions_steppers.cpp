@@ -153,6 +153,8 @@ void updateStepperSpeeds(int speed) {
 }
 
 static bool moving = false;
+static bool abortRequested = false;      // A ramped stop was requested (manual DIP switch)
+static bool lastMoveAborted = false;     // The move that has just finished was stopped early
 
 bool moveInProgress() {
   return moving;
@@ -184,6 +186,8 @@ bool triggerMove() {
 bool moveService() {
   if (moving && !motorsMoving()) {
     moving = false;
+    lastMoveAborted = abortRequested;
+    abortRequested = false;
     updateStepperPositions();
     return true;
   }
@@ -207,4 +211,23 @@ void emergencyStopMoves() {
     }
   }
   updateStepperPositions();
+}
+
+// Stop a running TeensyStep move with the normal deceleration (the manual DIP switch was turned on). moveService() reports the end of the move
+// as usual, and moveWasAborted() then says that it did not reach its target. The positions stay known.
+void stopMovesRamped() {
+  if (moving) {
+    abortRequested = true;
+    g1.stopAsync();
+  }
+}
+
+bool moveWasAborted() {
+  return lastMoveAborted;
+}
+
+// Tell TeensyStep where stepper i is (used after manual movement, which does not go through TeensyStep)
+void setStepperPosition(int i, long position) {
+  steppers[i]->setPosition(position);
+  stepperPositions[i] = position;
 }

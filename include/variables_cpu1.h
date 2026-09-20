@@ -28,6 +28,8 @@ extern word relayDataPrevious;
 extern int speedData;
 extern int speedDataPrevious;
 extern uint32_t lastModbusRequestMs;   // millis() when the last Modbus request from the PLC was answered
+extern volatile uint8_t manualFlagsShared;      // MANUAL_FLAG_ bits for the manual command CPU2 reads over I2C (written by the main loop, read by the interrupt)
+extern volatile uint8_t manualSpreaderShared;   // Spreader number for the manual command
 extern uint32_t tickerTime;
 extern uint16_t secondTicker;
 extern bool bootLoadGaps;

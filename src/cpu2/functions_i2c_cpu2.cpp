@@ -105,3 +105,21 @@ int readPattern() {
   otherFailCount++;
   return -1;  
 }
+
+// Function that requests the manual command from the slave (CPU1): the mode switches, the jog coils, the spreader number and the inputs.
+// Returns false if the transfer failed. Counted with the sensor reads, because it is used the same way.
+bool readManualCommand(ManualCommand& out) {
+  ioReadCount++;
+  Wire2.beginTransmission(0x40);
+  Wire2.write(I2C_CMD_MANUAL);
+  if (Wire2.endTransmission() != 0) {
+    ioFailCount++;
+    return false;
+  }
+  if (Wire2.requestFrom(0x40, sizeof(ManualCommand)) == sizeof(ManualCommand)) {
+    Wire2.readBytes((byte*)&out, sizeof(ManualCommand));
+    return true;
+  }
+  ioFailCount++;
+  return false;
+}
