@@ -108,11 +108,15 @@ void loop()
   webLoopTick();
 
   // Poll for Modbus TCP requests (server stays active even if client drops)
-  modbusServer.poll();
+  if (modbusServer.poll()) {
+    lastModbusRequestMs = millis();
+  }
 
-  if (!ethernetClient.connected()) {
-    ethernetConnect();
-  } else {
+  // Look for a new Modbus connection every pass. It replaces a dead or silent client (a PLC that lost power or its cable never
+  // closes its connection), but never an active one.
+  ethernetConnect();
+
+  if (ethernetClient.connected()) {
 
     // Check for new pattern gap data from the PLC
     if ((millis() - dataUpdateTime >= 5000) || bootLoadGaps) {  // Check every 5 s or on boot load

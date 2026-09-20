@@ -162,6 +162,7 @@ constexpr int HOME_IO_FAIL_LIMIT = 50;                  // Consecutive failed I2
 
 // Watchdog and CPU2 link supervision
 constexpr uint32_t WATCHDOG_TIMEOUT_MS = 2000;          // Both CPUs reset themselves if their main loop does not run for this long (multiple of 500 ms)
+constexpr uint32_t MODBUS_IDLE_TAKEOVER_MS = 3000;       // A new Modbus client replaces the current one if that has sent no request for this long (PLC lost power or cable). An active client is never replaced
 constexpr uint32_t CPU2_TIMEOUT_MS = 1500;              // CPU1 declares CPU2 lost (Fault, type FAULT_CPU2) if no status arrives for this long
 constexpr uint32_t CPU2_BOOT_GRACE_MS = 40000;          // ...but after a power up CPU2 gets this long to send its first status (it waits 5 s for the drivers and up to 20 s for CPU1)
 constexpr uint32_t HOME_SENSOR_TIMEOUT_US = 20000;      // The direct pulse interrupt stops all pulses if the last good sensor read is older than this

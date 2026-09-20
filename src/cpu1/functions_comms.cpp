@@ -98,18 +98,38 @@ void modbusSetup() {
   modbusServer.configureHoldingRegisters(101, 60);
 }
 
+// Look for a new Modbus TCP connection. Called every loop pass.
+// accept() returns a connected client at once. available() would wait up to 10 s for the client's first bytes,
+// freezing the whole loop for a client that connects and sends nothing.
+// Only one Modbus client is served at a time. A PLC that loses power or its network cable never closes its connection, so the old
+// connection would stay "connected" for ever and lock the new one out. So a new client replaces the old one if the old one is closed or has sent
+// no request for MODBUS_IDLE_TAKEOVER_MS. An active client is never displaced: the new connection is closed instead (the client retries).
 void ethernetConnect() {
   static uint32_t lastNoClientMsg = 0;            // timestamp of last "no client" message
   const uint32_t interval = 5000;                 // 5 seconds
 
-  // accept() returns a connected client at once. available() would wait up to 10 s for the client's first bytes,
-  // freezing the whole loop for a client that connects and sends nothing.
-  ethernetClient = ethernetServer.accept();       // <— store globally
-  if (ethernetClient.connected()) {
-    Serial.println("Ethernet client connected");
-    modbusServer.accept(ethernetClient);
-  } else {
-    // No client connected — print message only every 5 seconds
+  EthernetClient newClient = ethernetServer.accept();
+  if (newClient.connected()) {
+    bool oldConnected = ethernetClient.connected();
+    if (!oldConnected || millis() - lastModbusRequestMs > MODBUS_IDLE_TAKEOVER_MS) {
+      if (oldConnected) {
+        ethernetClient.stop();                    // Drop the dead or silent old connection
+        logEvent("PLC reconnected: the old connection was silent and has been dropped");
+      }
+      ethernetClient = newClient;                 // Store globally
+      modbusServer.accept(ethernetClient);
+      lastModbusRequestMs = millis();
+      Serial.println("Ethernet client connected");
+    } else {
+      newClient.stop();                           // The current PLC connection is active: refuse the newcomer
+      static uint32_t lastRefusedLog = 0;
+      if (millis() - lastRefusedLog > 5000) {     // Not more than one log line every 5 s
+        lastRefusedLog = millis();
+        logEvent("Modbus connection refused: another client is active");
+      }
+    }
+  } else if (!ethernetClient.connected()) {
+    // No client connected: print a message only every 5 seconds
     uint32_t now = millis();
     if (now - lastNoClientMsg >= interval) {
         Serial.println("No client connected yet");

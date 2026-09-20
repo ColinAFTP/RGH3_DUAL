@@ -18,6 +18,7 @@ word relayData = 0;
 word relayDataPrevious = 0;
 int speedData = 0;
 int speedDataPrevious = 0;
+uint32_t lastModbusRequestMs = 0;
 uint32_t tickerTime = 0;
 uint16_t secondTicker = 0;
 bool bootLoadGaps = false;

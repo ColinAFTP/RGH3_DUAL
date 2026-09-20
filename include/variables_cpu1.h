@@ -27,6 +27,7 @@ extern word relayData;
 extern word relayDataPrevious;
 extern int speedData;
 extern int speedDataPrevious;
+extern uint32_t lastModbusRequestMs;   // millis() when the last Modbus request from the PLC was answered
 extern uint32_t tickerTime;
 extern uint16_t secondTicker;
 extern bool bootLoadGaps;
