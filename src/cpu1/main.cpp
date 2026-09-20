@@ -146,6 +146,10 @@ void loop()
   if (plcConnected != plcWasConnected) {
     if (!plcConnected) {
       logEvent("Modbus client %s disconnected", plcRemoteText);   // The connect is logged, with its address, in ethernetConnect()
+      // Give the socket back and forget it. The stack reuses sockets: if this object kept pointing at the old socket number, the next connection
+      // to land on it (a web page request, for example) would look like a Modbus client, and the Modbus code would read the web request.
+      ethernetClient.stop();
+      ethernetClient = EthernetClient();
     }
     plcWasConnected = plcConnected;
   }
