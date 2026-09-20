@@ -84,7 +84,7 @@ void loop()
 {
 
   watchdogFeed();
-  if (DEBUG_HANG_TEST_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_S * 1000UL) {
+  if (DEBUG_HANG_TEST_CPU2_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_CPU2_S * 1000UL) {
     while (true) {}                     // TEST ONLY: hang, to check that the watchdog resets the CPU
   }
 

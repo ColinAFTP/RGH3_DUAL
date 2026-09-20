@@ -100,7 +100,7 @@ void loop()
 {
 
   watchdogFeed();
-  if (DEBUG_HANG_TEST_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_S * 1000UL) {
+  if (DEBUG_HANG_TEST_CPU1_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_CPU1_S * 1000UL) {
     while (true) {}                     // TEST ONLY: hang, to check that the watchdog resets the CPU
   }
 
@@ -179,7 +179,7 @@ void loop()
   static bool prevHome = false, prevTarget = false, prevFault = false;
   if (statusHome != prevHome) { logEvent("Home %s", statusHome ? "ON" : "OFF"); prevHome = statusHome; }
   if (statusAtTarget != prevTarget) { logEvent("At target %s", statusAtTarget ? "ON" : "OFF"); prevTarget = statusAtTarget; }
-  if (statusFault != prevFault) { logEvent("Homing fault %s", statusFault ? "ON" : "cleared"); prevFault = statusFault; }
+  if (statusFault != prevFault) { logEvent("Fault %s", statusFault ? "ON" : "cleared"); prevFault = statusFault; }
 
   if (relayData != relayDataPrevious) {
     Serial.print("   | New relay data: ");

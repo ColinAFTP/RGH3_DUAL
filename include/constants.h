@@ -165,7 +165,8 @@ constexpr uint32_t WATCHDOG_TIMEOUT_MS = 2000;          // Both CPUs reset thems
 constexpr uint32_t CPU2_TIMEOUT_MS = 1500;              // CPU1 declares CPU2 lost (Fault, type FAULT_CPU2) if no status arrives for this long
 constexpr uint32_t CPU2_BOOT_GRACE_MS = 40000;          // ...but after a power up CPU2 gets this long to send its first status (it waits 5 s for the drivers and up to 20 s for CPU1)
 constexpr uint32_t HOME_SENSOR_TIMEOUT_US = 20000;      // The direct pulse interrupt stops all pulses if the last good sensor read is older than this
-constexpr int DEBUG_HANG_TEST_S = 0;                    // TEST ONLY. 0 = off. Otherwise the CPU hangs in its main loop after this many seconds, to test the watchdog. Keep 0
+constexpr int DEBUG_HANG_TEST_CPU1_S = 0;               // TEST ONLY. 0 = off. Otherwise CPU1 hangs in its main loop after this many seconds, to test its watchdog. Keep 0
+constexpr int DEBUG_HANG_TEST_CPU2_S = 0;               // TEST ONLY. The same for CPU2. Keep 0
 constexpr bool DEBUG_STALL_TEST = false;                // TEST ONLY. CPU2 delays its homing loop by 40 ms once a second, to test the pulse timeout above. Keep false
 
 // I2C commands from CPU2 (master) to CPU1 (slave, address 0x40)

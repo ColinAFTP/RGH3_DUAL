@@ -68,7 +68,7 @@ async function gaps(){try{const g=await getj('/gaps.json');let h='<tr><th>Patter
  g.gaps.forEach((r,p)=>{h+='<tr'+(window.act==p+1?' class="act"':'')+'><td>'+(p+1)+'</td>'+r.map(v=>'<td>'+(v/10).toFixed(1)+'</td>').join('')+'</tr>'});$('gp').innerHTML=h}catch(e){}setTimeout(gaps,3000)}
 let last=0;
 async function log(){try{const j=await getj('/log.json?since='+last),L=$('log');
- j.ev.forEach(e=>{const d=document.createElement('div');d.innerHTML='<span class="t">'+fmt(Math.floor(e[1]/1000))+'</span>';const t=document.createElement('span');t.textContent=e[2];if(/FAULT/i.test(e[2]))t.className='f';d.appendChild(t);L.insertBefore(d,L.firstChild)});
+ j.ev.forEach(e=>{const d=document.createElement('div');d.innerHTML='<span class="t">'+fmt(Math.floor(e[1]/1000))+'</span>';const t=document.createElement('span');t.textContent=e[2];if(/FAULT|WATCHDOG|OFFLINE/i.test(e[2]))t.className='f';d.appendChild(t);L.insertBefore(d,L.firstChild)});
  while(L.children.length>200)L.removeChild(L.lastChild);last=j.last}catch(e){}setTimeout(log,1000)}
 tick();gaps();log();
 </script></body></html>)HTML";
