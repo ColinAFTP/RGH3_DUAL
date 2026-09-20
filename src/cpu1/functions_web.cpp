@@ -19,7 +19,7 @@ namespace {
 // ---------------------------------------------------------------- event log
 
 constexpr int LOG_SIZE = 48;
-constexpr int LOG_TEXT = 72;
+constexpr int LOG_TEXT = 100;                 // Longest event log line. The Modbus client messages hold two addresses
 struct LogEntry {
   uint32_t seq;                         // 1, 2, 3, ... never repeats
   uint32_t ms;                          // millis() when the event happened
@@ -57,7 +57,7 @@ int reqLen = 0;
 bool reqLineDone = false;
 uint32_t lastFour = 0;                  // Last four request bytes, to find the blank line that ends the headers
 
-char bodyBuf[4096];                     // JSON body
+char bodyBuf[6144];                     // JSON body. The event log JSON can hold 48 entries of up to LOG_TEXT characters
 size_t bodyLen = 0;
 const char* body = nullptr;             // Points at bodyBuf or at the page in flash
 char hdrBuf[160];

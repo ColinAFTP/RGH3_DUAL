@@ -128,7 +128,7 @@ void ethernetConnect() {
     if (!oldConnected || millis() - lastModbusRequestMs > MODBUS_IDLE_TAKEOVER_MS) {
       if (oldConnected) {
         ethernetClient.stop();                    // Drop the dead or silent old connection
-        logEvent("Modbus client %s replaced the silent client %s", newText, plcRemoteText);
+        logEvent("Modbus client %s replaced the silent client %s", newText, plcRemoteText);   // Two addresses: needs LOG_TEXT (functions_web.cpp) >= 90
       } else {
         logEvent("Modbus client connected from %s", newText);
       }
