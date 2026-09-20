@@ -277,3 +277,14 @@ All PASSED on the desk board (no motors, proxies simulated by switches):
 - IP address DIPs verified (see above). Tools: `tools/modbus_monitor.js [seconds] [home|slow|soft]`.
 Known cosmetic issue: while positions are UNKNOWN, a closing jog shows negative positions on the dashboard (the count starts at 0 at power-up). Clamp the status positions at 0 in `functions_status.cpp` at the next CPU2 flash.
 Still untested for manual mode: an over-travel sensor blocking opening of spreader 1 / 10 (needs proxies 1 and 11 wired and `OVERTRAVEL_ENABLED`), jogging during an active fault, pushing along with real proximity sensors (the bench sensors are static), manual mode on the real gripper (speed `MANUAL_PULSE_RATE`, ramp).
+
+## Manual mode: closing mirrors opening (2026-09-20, Colin's decision)
+
+Closing a spreader works like opening in the opposite direction: the selected spreader closes until its own home sensor is on (touching its inner neighbour), then that neighbour is pushed along too, and so on inwards, until every spreader of the chain is up against the one inside it (the innermost against the static spreader); then nothing can move any more ("jog stopped: touching its neighbour"). Opening pushes the touching spreaders further OUT. Both work on both sides of the static spreader. Code: `jogService()` in `src/cpu2/functions_manual.cpp` (`canMove[]` chain for closing).
+Bench results (all passed): opening S3 pushes S2 and S1; opening S6 pushes S7-S10; opening S4 pushes S3-S1 (`/tmp` script, left side and boundary); closing chain with gaps (`tools/modbus_close_chain_test.js`, proxies 6 and 7 switched by hand): S7 moved alone, when proxy 7 came on S6 moved too, when proxy 6 came on both stopped.
+
+Test lessons (2026-09-20):
+- Colin answers AFTER my message is shown, often more than a minute after a background script started: interactive bench scripts must wait patiently (minutes) for the manual action. Also keep sending Modbus requests while waiting, or CPU1's takeover rule (client silent > 3 s) lets another client in.
+- Some OTHER Modbus client (not on the PC, not Colin's simulator) repeatedly connected to CPU1 (about 1.5 s connected, 1 s gap) from ~12:30 for several minutes, and it took the slot whenever my script was silent. While a client polls actively it is refused. CPU1's log does not show the remote IP: TODO log `remoteIP()` in the "PLC connected" events (needs a CPU1 flash) to identify the source.
+- An automatic home after manual mode that runs while a proxy is switched off correctly ends in a homing fault (spreader 6 in this session, mask 0x20): reset it with coil 107 before the next test. Manual mode still works while a fault is active.
+- Leftover `pio run` / SCons python processes accumulate from background flash commands that never finish; they can hold COM ports. Kill them before flashing (`Get-CimInstance Win32_Process` filter on scons/pio.exe).
