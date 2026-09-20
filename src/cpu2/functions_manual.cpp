@@ -17,7 +17,8 @@
 //    until CPU2 stands still.
 //  - The PLC moves one spreader at a time with the direct pulse engine (the same as homing, no TeensyStep): register ADDR_MANUAL_PTR is the spreader
 //    number and coil ADDR_MANUAL_OPN / ADDR_MANUAL_CLS moves it forward (open) / backward (close) while the coil is on.
-//  - Closing stops when the spreader's own home sensor is on (it is touching its neighbour).
+//  - Closing is the mirror image: the spreader closes until its own home sensor is on (touching its inner neighbour), then that neighbour is pushed along too,
+//    and so on inwards, until the whole chain is up against the static spreader and nothing can move any more.
 //  - Opening also pushes along every spreader further out that is touching the one in front of it (its home sensor is on), so a spreader never runs
 //    into the next one. Opening stops at the travel limit or when an over travel sensor is on.
 //  - Leaving manual mode homes automatically. Pattern requests are refused while manual mode is on (main.cpp).
@@ -190,8 +191,24 @@ void jogService() {
   auto proxyOn = [&](int k) { return ((in >> (PROXY_FIRST_BIT + k)) & 1) != 0; };
 
   if (want < 0) {
-    // Close: move until the spreader touches its neighbour (its own home sensor is on)
-    if (proxyOn(idx)) stopReason = EVT_JOG_TOUCHING; else run[idx] = true;
+    // Close: the mirror image of opening. The spreader moves until it touches its inner neighbour (its own home sensor is on). From then on the
+    // inner neighbour is pushed along too, and so on inwards, until everything in the chain is up against the one inside it (the last one
+    // against the static spreader). Then nothing can move any more.
+    bool leftSide = idx < NUM_LEFT_SPREADERS;
+    int inward = leftSide ? +1 : -1;                    // Towards the static spreader, in stepper index
+    int innermost = leftSide ? NUM_LEFT_SPREADERS - 1 : NUM_LEFT_SPREADERS;
+    // canMove[j]: spreader j can close, because it is not touching its inner neighbour yet, or that neighbour can move out of the way
+    bool canMove[NUM_GAPS] = {false};
+    for (int j = innermost; ; j -= inward) {
+      canMove[j] = !proxyOn(j) || (j != innermost && canMove[j + inward]);
+      if (j == idx) break;
+    }
+    run[idx] = canMove[idx];
+    for (int j = idx + inward; leftSide ? (j <= innermost) : (j >= innermost); j += inward) {
+      // The inner neighbour is pushed along while the spreader in front of it is touching it
+      run[j] = run[j - inward] && proxyOn(j - inward) && canMove[j];
+    }
+    if (!run[idx]) stopReason = EVT_JOG_TOUCHING;
   } else {
     // Open: the spreader itself, and every spreader further out that is touching the one in front of it
     run[idx] = true;

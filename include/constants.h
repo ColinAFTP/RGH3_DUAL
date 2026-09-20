@@ -246,7 +246,8 @@ constexpr int DIP_PCB3_PIN = 39;                    // PCB DIP 3: manual mode
 // Manual mode (see functions_manual.cpp on CPU2). Manual mode is on while the manual DIP switch is on OR the PLC has set coil ADDR_MANUAL.
 // The DIP switch overrides the PLC: it stops any motion at once, and the PLC cannot leave manual mode while the switch is on.
 // In manual mode the PLC moves ONE spreader at a time: holding register ADDR_MANUAL_PTR = spreader number (1 to 10, not 5), coil ADDR_MANUAL_OPN
-// moves it forward (open) and coil ADDR_MANUAL_CLS backward (close), for as long as the coil is on. Spreaders further out that are touching it are pushed along.
+// moves it forward (open) and coil ADDR_MANUAL_CLS backward (close), for as long as the coil is on. Opening pushes along the spreaders further out that are touching it; closing
+// pushes along the spreaders further in that it touches, up to the static spreader.
 // Leaving manual mode starts an automatic home. Pattern requests are refused while manual mode is on.
 constexpr int DIP_MANUAL_PIN = DIP_PCB3_PIN;              // The manual mode DIP switch (PCB DIP 3, CPU1)
 constexpr int DIP_MANUAL_ACTIVE_LEVEL = 1;              // Pin level when the switch is ON: 1 = HIGH, 0 = LOW. Change to 0 if the switch is wired the other way round
