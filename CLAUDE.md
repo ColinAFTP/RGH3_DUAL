@@ -288,3 +288,10 @@ Test lessons (2026-09-20):
 - Some OTHER Modbus client (not on the PC, not Colin's simulator) repeatedly connected to CPU1 (about 1.5 s connected, 1 s gap) from ~12:30 for several minutes, and it took the slot whenever my script was silent. While a client polls actively it is refused. CPU1's log does not show the remote IP: TODO log `remoteIP()` in the "PLC connected" events (needs a CPU1 flash) to identify the source.
 - An automatic home after manual mode that runs while a proxy is switched off correctly ends in a homing fault (spreader 6 in this session, mask 0x20): reset it with coil 107 before the next test. Manual mode still works while a fault is active.
 - Leftover `pio run` / SCons python processes accumulate from background flash commands that never finish; they can hold COM ports. Kill them before flashing (`Get-CimInstance Win32_Process` filter on scons/pio.exe).
+
+## Modbus client address logging and dashboard clamp (2026-09-20)
+
+- CPU1 now logs the address of every Modbus client in the event log: "Modbus client connected from a.b.c.d:port", "Modbus client a.b.c.d:port disconnected", "Modbus client X replaced the silent client Y", "Modbus connection from X refused: Y is active". Code: `clientText()` and `ethernetConnect()` in `src/cpu1/functions_comms.cpp` (the address is only valid after using the client as a bool: `operator bool` fills it in via `fnet_socket_getpeername`). `plcRemoteText` holds the address of the current client.
+- Purpose: an unknown Modbus client (not Colin's simulator, not this PC, Colin was alone in the office) repeatedly connected for minutes at about 12:30 on 2026-09-20 (about 1.5 s connected, 1 s gap). Check the log for its address when it returns.
+- Observed: tests run from Colin's PC appear to CPU1 as 192.168.2.7 (not the PC's 192.168.2.10 adapter address): the PC reaches the controller through another route. A different address in the log is therefore a different device.
+- Dashboard: positions shown while manual mode is active are clamped at 0 (a closing jog while positions are unknown no longer shows negative mm).
