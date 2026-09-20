@@ -249,3 +249,9 @@ Note for the PLC programmer: if the PLC connects while another Modbus master (fo
 **E. Housekeeping**
 16. Git: local commits after `1ce0f39` are NOT pushed to GitHub (`git push origin master`).
 17. No automated tests exist; all testing was on the desk board with simulated proxies and no motors.
+
+## Decisions by Colin, 2026-09-20 (answers to open items 6-9)
+- Item 6: auto home at power-up is ACCEPTABLE AND DESIRABLE. Keep it.
+- Item 7: gap resolution = WHOLE mm (the 16-bit holding registers stay as they are, no 0.1 mm scaling). Closed.
+- Item 8: coil 101 (`ADDR_HOMING`) is used to tell the PLC that the gripper is busy with a homing routine. It is NOT a PLC request. Plan: CPU1 writes coil 101 = 1 while CPU2 is homing (any stage, including power-up homing and fault-reset homing), 0 otherwise. The PLC only reads it.
+- Item 9: manual mode next. Spec from Colin: with the manual mode DIP switch on, the gripper takes movement instructions over Modbus to move spreaders ONE AT A TIME instead of all together: holding register 107 = which spreader, coil 105 = move forward (open), coil 106 = move backward (close). A soft manual mode can be requested by the PLC with coil 104. The DIP switch works in parallel with the PLC request and overrides it at hardware level. Manual movement uses the same direct pulse generation as homing (NOT TeensyStep). If the gripper is homed and spreader 8 is moved forward, spreaders 9 and 10 also move forward so 8 cannot crash into 9. Manual mode must be shown in ORANGE on the dashboard Status card.
