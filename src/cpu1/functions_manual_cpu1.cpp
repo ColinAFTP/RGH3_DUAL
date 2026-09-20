@@ -110,3 +110,8 @@ uint8_t manualOpenClose() {
 uint8_t manualSpreader() {
   return spreader;
 }
+
+// The raw levels of the three DIP switch pins, for the web page: bit 0 = DIP_SW1 (IP address), bit 1 = DIP_SW2 (IP address), bit 2 = DIP_SW3 (manual mode)
+uint8_t manualDipPinsRaw() {
+  return (digitalRead(DIP_SW1) ? 1 : 0) | (digitalRead(DIP_SW2) ? 2 : 0) | (digitalRead(DIP_SW3) ? 4 : 0);
+}

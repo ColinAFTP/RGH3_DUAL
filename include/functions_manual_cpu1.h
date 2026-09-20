@@ -14,5 +14,6 @@ bool manualModeOn();                    // Manual mode is on or requested: DIP s
 bool manualCpu2Active();                // CPU2 reports that manual mode is active
 uint8_t manualOpenClose();              // Bit 0: open coil, bit 1: close coil, as sent to CPU2 (already cancelled if the PLC is silent)
 uint8_t manualSpreader();               // Register ADDR_MANUAL_PTR as sent to CPU2
+uint8_t manualDipPinsRaw();             // Raw pin levels of DIP_SW1 (bit 0), DIP_SW2 (bit 1) and DIP_SW3 (bit 2), for the web page
 
 #endif

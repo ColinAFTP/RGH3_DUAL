@@ -93,9 +93,9 @@ void buildStatus() {
     jp("%s%d", i ? "," : "", (int)cpu2Status.positions[i]);
   }
   jp("]}");
-  jp(",\"manual\":{\"active\":%d,\"dip\":%d,\"soft\":%d,\"spr\":%u,\"open\":%d,\"close\":%d}}",
+  jp(",\"manual\":{\"active\":%d,\"dip\":%d,\"soft\":%d,\"spr\":%u,\"open\":%d,\"close\":%d,\"dips\":%u}}",
      manualCpu2Active() ? 1 : 0, manualDipOn() ? 1 : 0, manualSoftOn() ? 1 : 0, (unsigned)manualSpreader(),
-     (manualOpenClose() & 1) ? 1 : 0, (manualOpenClose() & 2) ? 1 : 0);
+     (manualOpenClose() & 1) ? 1 : 0, (manualOpenClose() & 2) ? 1 : 0, (unsigned)manualDipPinsRaw());
 }
 
 // Gaps in tenths of a millimetre
