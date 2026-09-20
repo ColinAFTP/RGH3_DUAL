@@ -276,6 +276,13 @@ void cpu2StatusService() {
     statusRingTail = (tail + 1) % STATUS_RING_SIZE;
 
     cpu2Status = p;
+
+    // The fault mask and type also arrive in every status, so they are restored within 250 ms if CPU1 restarts while a fault is active
+    if (p.faultMask != faultMaskRx || p.faultType != faultTypeRx) {
+      faultMaskRx = p.faultMask;
+      faultTypeRx = p.faultType;
+      faultMaskNew = true;               // The main loop copies both to the Modbus registers
+    }
     cpu2StatusMs = millis();
     cpu2RxCount++;
     int n = p.numEvents < STATUS_MAX_EVENTS ? p.numEvents : STATUS_MAX_EVENTS;
