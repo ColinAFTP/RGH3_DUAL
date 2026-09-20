@@ -220,3 +220,32 @@ Problem (reproduced): a Modbus client that vanishes without closing its TCP conn
 Fix (`ethernetConnect()` in src/cpu1/functions_comms.cpp, called every loop pass): a new client replaces the current one if the current one is closed, or has sent no request for `MODBUS_IDLE_TAKEOVER_MS` (3 s, constants.h). An ACTIVE client is never displaced: the newcomer's connection is closed and "Modbus connection refused: another client is active" is logged (max once per 5 s). `lastModbusRequestMs` is set whenever `modbusServer.poll()` answers a request. So a returning PLC gets back in within ~3 s of its last request; a PLC that retries connecting every few seconds will succeed on a retry.
 Bench results: silent client replaced (served on the first attempt), active client (20 ms polling) untouched while a second client was refused, real cable pull (silent client + 10 s unplug) then a new client served on the first attempt. Worst CPU1 loop pass ~80 us. Tools: `tools/modbus_stale_test.js hold|probe`.
 Note for the PLC programmer: if the PLC connects while another Modbus master (for example a Modbus simulator) is actively polling, the PLC is refused. Disconnect other masters first.
+
+## OPEN ITEMS (consolidated 2026-09-20, supersedes the older lists above for what is still to do)
+
+**A. Before the first run on a real gripper (hardware and procedure)**
+1. Verify motor direction and scaling: TeensyStep positive = OPEN and homing (dir pin LOW) = CLOSE are assumed; `STEPS_PER_MM` is computed, not measured. Motors off the mechanics first if possible, low speed, hand on the E-stop.
+2. Wire proxies 1 and 11, then set `OVERTRAVEL_ENABLED = true` and bench-test over travel (steps in the "Over travel protection" section). Until then inputs 1 and 11 float and the protection is OFF.
+3. Drive pins during reset/programming: check the PST8072 inputs for a defined level (pull-downs) so the drives cannot move while a CPU resets or is flashed; consider driving the drives' ENA from CPU2 (hardware stop for faults/over travel). Firmware over travel is not a safety function.
+4. PST8072 timing: datasheet not found; supplier note drafted (min pulse width, direction setup/hold, active edge, 3.3 V input levels, half-step and 3.0 A settings). Confirm our 8 us (TeensyStep) and 20 us (homing) pulses and 5/10 us direction setup.
+5. Tune on the real gripper: `HOME_PULSE_RATE`, `HOME_START_RATE`, `HOME_RAMP_MS`, `HOME_APPROACH_MM` (0 = TeensyStep only, fallback if hybrid homing is too slow), `INIT_ACCEL`, `MAX_SPEED`, `INPUT_FILTER_SAMPLES` for the real sensor cables.
+6. Confirm that auto-home at power-up (moves motors without a PLC command) is acceptable for the real machine (guarding, people nearby).
+
+**B. Decisions still needed from Colin**
+7. Gap resolution: whole mm (16-bit registers) or 0.1 mm scaling. Decide BEFORE the PLC program is written; changing later changes the PLC.
+8. Coil 101 `ADDR_HOMING`: unused, left in place on purpose; revisit and remove or repurpose.
+9. Manual mode / jog (coils 104-106, register 107, DIP switch, INPUT_A2/OUTPUT_A2): on hold by Colin. Useful for commissioning and jam recovery.
+
+**C. Code still to write**
+10. Stuck-on proximity sensor detection (optional plausibility check: with a gap of several mm the matching proxy must be OFF).
+11. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, input registers 101-110 (unused). The PLC must not use relays 1 and 2 (overwritten by Home / At Target).
+
+**D. Still to investigate or test**
+12. I2C reliability: external pull-ups on pins 24/25 (1 MHz bus)? Measured 4 failed sensor reads in ~21,650; the Wire library also printed "Timed out waiting for transfer to finish".
+13. Input glitches on WIRED inputs (P2, P3) still appear about every few minutes, some during the homing pulse stage: possible coupling from step pulse wires. The filter removes them; check wiring/shielding on the real gripper.
+14. CPU1's own watchdog reset never provoked (same shared code as CPU2, which was). A watchdog reset in the middle of a real move: after it CPU2 does a power-up search home if proxies are not all on.
+15. PLC handshake for the PLC programmer (write the pattern, wait for At Target = 1 which is already 0, check Move Refused 121, Home requires CPU2 online, Fault 120 types 1/2/3, other Modbus masters must be disconnected) is only written in CLAUDE.md, not in a document for the PLC side.
+
+**E. Housekeeping**
+16. Git: local commits after `1ce0f39` are NOT pushed to GitHub (`git push origin master`).
+17. No automated tests exist; all testing was on the desk board with simulated proxies and no motors.
