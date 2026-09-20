@@ -1,6 +1,8 @@
 // Watches the controller's status bits and registers over Modbus TCP and prints every change with a timestamp.
 // Usage: node tools/modbus_monitor.js [seconds]      (default 60)
 // Shows: Home(117) AtTarget(118) Fault(120) Refused(121) Cpu2Online(122), FaultSpreaders(108) FaultType(109) RefusedReason(110).
+// Option "soft": node tools/modbus_monitor.js 40 soft  holds the PLC manual request (coil 104) on for the whole run and clears it at the end.
+// Option "slow": node tools/modbus_monitor.js 45 slow  starts a slow pattern 1 move (speed 250) so a manual DIP switch flip can be tested mid-move.
 // Option "home": node tools/modbus_monitor.js 40 home  first selects pattern 1 (speed 3000), then after 4 s pattern 0 (home), all on the same connection.
 // CPU1 accepts one Modbus client at a time: disconnect other Modbus masters first.
 const net = require('net');
@@ -39,6 +41,10 @@ async function writeRegs(addr, values) {
   const r = await req(16, d);
   if (r[7] & 0x80) throw new Error("Modbus exception writing " + addr);
 }
+async function writeCoil(addr, on) {
+  const d = Buffer.alloc(4); d.writeUInt16BE(addr, 0); d.writeUInt16BE(on ? 0xFF00 : 0, 2);
+  await req(5, d);
+}
 async function readHolding(addr, qty) {
   const d = Buffer.alloc(4); d.writeUInt16BE(addr, 0); d.writeUInt16BE(qty, 2);
   const r = await req(3, d);
@@ -56,6 +62,8 @@ sock.on('connect', async () => {
   console.log(ts() + '  connected, watching for ' + seconds + ' s');
   try {
     while (Date.now() < end) {
+      if (process.argv[3] === "soft" && step === 0) { step = 1; console.log(ts() + "  >> PLC manual request ON (coil 104) for the whole run"); await writeCoil(104, true); }
+      if (process.argv[3] === "slow" && step === 0) { step = 1; console.log(ts() + "  >> slow pattern 1 move (speed 250 steps/s, about 30 s)"); await writeRegs(111, Array(9).fill(20)); await writeRegs(105, [250]); await writeRegs(104, [1]); }
       if (process.argv[3] === "home") {
         if (step === 0) { step = 1; console.log(ts() + "  >> select pattern 1"); await writeRegs(105, [3000]); await writeRegs(104, [1]); }
         if (step === 1 && Date.now() - t0 > 4000) { step = 2; console.log(ts() + "  >> select pattern 0 (home)"); await writeRegs(104, [0]); }
@@ -67,6 +75,7 @@ sock.on('connect', async () => {
       if (s !== last) { console.log(ts() + '  ' + s); last = s; }
       await sleep(20);
     }
-  } catch (e) { console.error('ERROR', e.message); }
+  } catch (e) { console.error("ERROR", e.message); }
+  if (process.argv[3] === "soft") { try { await writeCoil(104, false); console.log(ts() + "  >> PLC manual request OFF"); } catch (e) {} }
   sock.end(); process.exit(0);
 });
