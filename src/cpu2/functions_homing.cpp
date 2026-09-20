@@ -44,6 +44,10 @@ uint32_t cascadeStartTime = 0;
 IntervalTimer pulseTimer;
 volatile bool runFlag[NUM_GAPS];        // Set by the main loop: this stepper should be running now
 volatile uint32_t pulseCount[NUM_GAPS]; // Pulses emitted per stepper since the direct pulse routine started
+volatile uint32_t lastSensorReadUs = 0; // micros() of the last good sensor read. The interrupt stops all pulses if it gets older than HOME_SENSOR_TIMEOUT_US
+volatile bool pulseStale = false;       // Set by the interrupt when it stopped the pulses for old sensor data. The main loop reports it and clears it
+long cascadeStartPos[NUM_GAPS];         // Stepper positions when the direct pulse stage started
+bool cascadeStartKnown = false;         // ...and whether they were trustworthy
 float curRate[NUM_GAPS];                // Current pulse rate in steps/s (interrupt only)
 float phaseAcc[NUM_GAPS];               // Step phase accumulator, a pulse is emitted each time it passes 1.0 (interrupt only)
 bool pinHigh[NUM_GAPS];                 // Step pin is currently high (interrupt only)
@@ -64,13 +68,17 @@ void pulseISR() {
   constexpr float tick = HOME_TICK_US * 1e-6f;
   constexpr float rampPerTick = (float)(HOME_PULSE_RATE - HOME_START_RATE) / ((float)HOME_RAMP_MS * 1000.0f / HOME_TICK_US);
 
+  // Never pulse on old data: if the main loop has not confirmed the sensors recently, everything stops (and restarts with the ramp)
+  bool stale = (uint32_t)(micros() - lastSensorReadUs) > HOME_SENSOR_TIMEOUT_US;
+  if (stale) pulseStale = true;
+
   for (int i = 0; i < NUM_GAPS; i++) {
     // End the pulse started on the previous tick
     if (pinHigh[i]) {
       digitalWrite(stepPins[i], LOW);
       pinHigh[i] = false;
     }
-    if (runFlag[i]) {
+    if (runFlag[i] && !stale) {
       // Ramp up to the homing rate
       if (curRate[i] < HOME_PULSE_RATE) {
         curRate[i] += rampPerTick;
@@ -140,6 +148,11 @@ void beginCascade() {
     pinHigh[i] = false;
     digitalWrite(dirPins[i], DIR_CLOSE);
   }
+  updateStepperPositions();
+  for (int i = 0; i < NUM_GAPS; i++) cascadeStartPos[i] = stepperPositions[i];
+  cascadeStartKnown = posKnown;
+  pulseStale = false;
+  lastSensorReadUs = micros();
   delayMicroseconds(10);                // Direction setup time before the first pulse
   ioFailCount = 0;
   cascadeStartTime = millis();
@@ -162,6 +175,14 @@ void completeHoming() {
 
 // One pass of the direct pulse routine, called every loop
 void cascadeStep() {
+  if (DEBUG_STALL_TEST) {
+    static uint32_t lastStall = 0;
+    if (millis() - lastStall > 1000) {
+      lastStall = millis();
+      delay(40);                        // TEST ONLY: longer than HOME_SENSOR_TIMEOUT_US, so the interrupt must stop the pulses
+    }
+  }
+
   int io = readIO();
   if (io < 0) {
     // Never move blind: stop until the sensors can be read again
@@ -173,6 +194,11 @@ void cascadeStep() {
     return;
   }
   ioFailCount = 0;
+  lastSensorReadUs = micros();
+  if (pulseStale) {
+    pulseStale = false;
+    statusEvent(EVT_PULSE_TIMEOUT);
+  }
 
   bool allOn = true;
   uint16_t failed = 0;
@@ -339,4 +365,10 @@ uint16_t faultMask() {
 
 uint8_t faultType() {
   return faultTypeValue;
+}
+
+long cascadePositionSteps(int i) {
+  if (!cascadeStartKnown) return 0;
+  long p = cascadeStartPos[i] - (long)pulseCount[i];
+  return p < 0 ? 0 : p;
 }

@@ -6,6 +6,7 @@
 #include "functions_i2c.h"
 #include "functions_io.h"
 #include "functions_web.h"
+#include "functions_watchdog.h"
 #include "variables_cpu1.h"
 
 // Set up local variables
@@ -40,6 +41,8 @@ void receiveCommand(int howMany) {
 
 void setup()
 {
+  bool watchdogReset = watchdogCausedReset();   // Read this first: it says why the CPU started
+
   Serial.begin(9600);                // Start serial for output
   // Wait for a USB host for up to 3 s only, so the controller still starts when running stand-alone
   while (!Serial && millis() < 3000) {
@@ -65,6 +68,9 @@ void setup()
 
   // Start the diagnostics web server
   webSetup();
+  if (watchdogReset) {
+    logEvent("CPU1 was restarted by the WATCHDOG (it had hung)");
+  }
 
   // Clear the relay outputs
   relayControl(0);
@@ -85,10 +91,18 @@ void setup()
   Wire2.onRequest(onI2CRequest);
   Wire2.setClock(1000000);
 
+  // Every long wait in setup() is over: from now on the watchdog resets the CPU if the main loop stops
+  watchdogStart();
+
 }
 
 void loop()
 {
+
+  watchdogFeed();
+  if (DEBUG_HANG_TEST_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_S * 1000UL) {
+    while (true) {}                     // TEST ONLY: hang, to check that the watchdog resets the CPU
+  }
 
   // Measure how long each pass of the loop takes (shown on the web page)
   webLoopTick();
@@ -112,6 +126,14 @@ void loop()
   webService();
   cpu2StatusService();
 
+  // Log when CPU2 stops or starts reporting
+  static bool cpu2WasOnline = false;
+  bool cpu2IsOnline = cpu2Online();
+  if (cpu2IsOnline != cpu2WasOnline) {
+    logEvent(cpu2IsOnline ? "CPU2 online" : "CPU2 OFFLINE: no status received");
+    cpu2WasOnline = cpu2IsOnline;
+  }
+
   // Log when the PLC connects or disconnects
   static bool plcWasConnected = false;
   bool plcConnected = ethernetClient.connected();
@@ -127,6 +149,11 @@ void loop()
     Serial.print("   | Current pattern: ");
     Serial.println(patternSelection);
     logEvent(patternSelection == 0 ? "PLC selected pattern 0 (home)" : "PLC selected pattern %d", patternSelection);
+
+    // A new valid request: At Target goes off now (until CPU2 has dropped its own line), and an old refusal is cleared
+    atTargetBlank = true;
+    atTargetBlankStart = millis();
+    cpu1Refused = false;
 
     // Refresh the gap data and speed from the PLC now, so CPU2 always moves with the latest values
     patternUpdateCheck();
@@ -210,7 +237,6 @@ void loop()
   if (faultMaskNew) {
     faultMaskNew = false;
     modbusServer.holdingRegisterWrite(ADDR_FAULT_SPREADERS, faultMaskRx);
-    modbusServer.holdingRegisterWrite(ADDR_FAULT_TYPE, faultTypeRx);
   }
 
   // Fault reset requested by the PLC: clear the coil and give CPU2 a 100 ms pulse on the fault reset line

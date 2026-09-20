@@ -4,6 +4,7 @@
 
 #include "constants.h"
 #include "functions_comms.h"
+#include "functions_web.h"
 #include "variables_cpu1.h"
 
 // Create the Modbus IP object
@@ -77,9 +78,9 @@ void modbusSetup() {
   }
 
   // Set up input status bits. 
-  // Status bit range is 101 - 120
+  // Status bit range is 101 - 130
   // Status bits are read only from the PLC.
-  modbusServer.configureDiscreteInputs(101, 20);
+  modbusServer.configureDiscreteInputs(101, 30);
 
   // Set up coils. 
   // Coil range is 101 - 120
@@ -129,6 +130,10 @@ void patternCheck() {
     patternSelection = patternSelectionPrevious;
     Serial.println();
     Serial.println("Error: Pattern selection is out of bounds!");
+    // Tell the PLC: Move Refused on, with the reason. The next valid pattern change clears it.
+    cpu1Refused = true;
+    cpu1RefusedReason = EVT_REASON_BAD_PATTERN;
+    logEvent("PLC pattern selection out of range - refused");
     modbusServer.holdingRegisterWrite(ADDR_PATTERN, patternSelectionPrevious);
   }
 }

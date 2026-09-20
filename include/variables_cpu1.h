@@ -35,6 +35,17 @@ extern bool bootLoadGaps;
 extern bool statusHome;                 // All home proximity sensors on and no fault
 extern bool statusAtTarget;             // CPU2 says a move or homing has finished
 extern bool statusFault;                // CPU2 has a homing fault
+extern bool statusRefused;              // The last request was refused (by CPU1 or CPU2)
+extern uint8_t statusRefusedReason;     // ...and why (EVT_REASON_ constant)
+extern uint8_t faultTypeShown;          // The fault type shown to the PLC: FAULT_CPU2 if CPU2 is lost, otherwise the type CPU2 reported
+
+// A pattern selection that CPU1 itself refused (out of range)
+extern bool cpu1Refused;
+extern uint8_t cpu1RefusedReason;
+
+// At Target is forced off from the moment a new pattern is selected until CPU2 has dropped its own At Target line
+extern bool atTargetBlank;
+extern uint32_t atTargetBlankStart;
 
 // Status packets received from CPU2 over I2C. The receive interrupt fills the ring, the main loop empties it.
 constexpr int STATUS_RING_SIZE = 4;

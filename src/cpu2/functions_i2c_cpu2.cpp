@@ -6,6 +6,21 @@
 
 // I2C functions of CPU2, which is the master. CPU1 is the slave (address 0x40).
 
+// Counters of failed I2C transfers, reported on the CPU1 web page. The 1 MHz bus can show occasional errors, so they are counted.
+static uint32_t ioReadCount = 0;        // Times the inputs were read from CPU1
+static uint16_t ioFailCount = 0;        // ...of which failed
+static uint16_t otherFailCount = 0;     // Failed transfers of every other kind
+
+void i2cCountOtherFail() {
+  otherFailCount++;
+}
+
+void i2cStats(uint32_t& reads, uint16_t& ioFails, uint16_t& otherFails) {
+  reads = ioReadCount;
+  ioFails = ioFailCount;
+  otherFails = otherFailCount;
+}
+
 // Copy values from the received I2C packet to the gap pattern array and the stepper speed
 void copyFromReceiveData() {
     for (int r = 0; r < NUM_PATTERNS; r++) {
@@ -22,11 +37,13 @@ void copyFromReceiveData() {
 // Returns the input word (0 to 65535), or -1 if the transfer failed.
 int readIO() {
   uint16_t value = 0;
+  ioReadCount++;
 
   // Tell CPU1 we want IO data
   Wire2.beginTransmission(0x40);
   Wire2.write(I2C_CMD_IO);
   if (Wire2.endTransmission() != 0) {
+    ioFailCount++;
     return -1;
   }
 
@@ -35,7 +52,8 @@ int readIO() {
     return value;
   }
 
-  return -1;  
+  ioFailCount++;
+  return -1;
 }
 
 // Function that sends the bitmask of spreaders that failed to home to the slave (CPU1).
@@ -46,7 +64,9 @@ bool writeFaultMask(uint16_t mask, uint8_t type) {
   Wire2.write((uint8_t)(mask & 0xFF));
   Wire2.write((uint8_t)(mask >> 8));
   Wire2.write(type);
-  return Wire2.endTransmission() == 0;
+  bool ok = Wire2.endTransmission() == 0;
+  if (!ok) otherFailCount++;
+  return ok;
 }
 
 // Function that requests all pattern gap data and the stepper speed from the slave (CPU1). 
@@ -62,6 +82,7 @@ bool readGapPatterns() {
         return true;
     }
     Serial.println("Gap pattern read over I2C failed");
+    otherFailCount++;
     return false;
 }
 
@@ -81,5 +102,6 @@ int readPattern() {
   }
 
   Serial.println("Pattern selection read over I2C failed");
+  otherFailCount++;
   return -1;  
 }

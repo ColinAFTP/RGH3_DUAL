@@ -7,6 +7,7 @@
 #include "functions_i2c.h"
 #include "functions_status.h"
 #include "functions_steppers.h"
+#include "functions_watchdog.h"
 #include "functions_io.h"
 #include "variables.h"
 
@@ -38,6 +39,7 @@ static void plotPositions() {
 
 void setup()
 {
+  bool watchdogReset = watchdogCausedReset();   // Read this first: it says why the CPU started
   pinMode(led, OUTPUT);
   Wire2.begin();                         // Join I2C bus
 
@@ -68,15 +70,23 @@ void setup()
   dataUpdateTime = millis() - 10000;
   plotTime = millis();
 
-  statusEvent(EVT_BOOT);
+  statusEvent(EVT_BOOT, watchdogReset ? 1 : 0);
 
   // Home automatically if not all the home sensors are on
   homingStartup();
+
+  // Every long wait in setup() is over: from now on the watchdog resets the CPU if the main loop stops
+  watchdogStart();
 
 }
 
 void loop()
 {
+
+  watchdogFeed();
+  if (DEBUG_HANG_TEST_S > 0 && millis() > (uint32_t)DEBUG_HANG_TEST_S * 1000UL) {
+    while (true) {}                     // TEST ONLY: hang, to check that the watchdog resets the CPU
+  }
 
   // Over travel sensors: stop everything at once if CPU1 says one is on
   overTravelService();
@@ -121,13 +131,16 @@ void loop()
   bool currentInputA1State = digitalRead(INPUT_A1);
   if (currentInputA1State && !lastInputA1State) {
     Serial.println("Trigger signal (INPUT_A1) detected!");
+    // A new request: clear the "refused" flag, and At Target goes off until this request has really been carried out
+    requestStarted();
+    digitalWrite(OUTPUT_B2, LOW);
     if (busy) {
       // Do nothing else: reading data or changing speeds here would disturb the running move
       Serial.println("Move requested while already moving - ignored.");
-      statusEvent(EVT_REFUSED, EVT_REASON_BUSY);
+      requestRefused(EVT_REASON_BUSY);
     } else if (faultActive()) {
       Serial.println("Move refused: homing fault is active.");
-      statusEvent(EVT_REFUSED, EVT_REASON_FAULT);
+      requestRefused(EVT_REASON_FAULT);
     } else {
       int pattern = readPattern();
       Serial.print("   | Current pattern: ");
@@ -137,21 +150,21 @@ void loop()
       // Refresh the gap data and speed straight away so the move never uses stale values
       if (pattern < 0 || pattern > NUM_PATTERNS) {
         Serial.println("Move aborted: invalid pattern received from CPU1.");
-        statusEvent(EVT_REFUSED, EVT_REASON_BAD_PATTERN);
+        requestRefused(EVT_REASON_BAD_PATTERN);
       } else if (!readGapPatterns()) {
         Serial.println("Move aborted: could not refresh gap data from CPU1.");
-        statusEvent(EVT_REFUSED, EVT_REASON_NO_GAPS);
+        requestRefused(EVT_REASON_NO_GAPS);
       } else if (pattern == 0) {
         // Pattern 0 is home
         if (!homeRequest()) {
           Serial.println("Home request failed.");
-          statusEvent(EVT_REFUSED, EVT_REASON_HOME_FAILED);
+          requestRefused(EVT_REASON_HOME_FAILED);
         }
       } else if (!positionsKnown()) {
         // Only refused while the stepper positions are unknown (power up before the first home, or after a fault).
         // Moving from one pattern to another without going home in between is allowed.
         Serial.println("Move refused: stepper positions unknown, home first.");
-        statusEvent(EVT_REFUSED, EVT_REASON_UNKNOWN_POS);
+        requestRefused(EVT_REASON_UNKNOWN_POS);
       } else if (stepTargetCalc(pattern)) {
         updateStepperSpeeds(stepperSpeed);
         if (triggerMove()) {
@@ -159,7 +172,7 @@ void loop()
         }
       } else {
         Serial.println("Move aborted: targets not valid.");
-        statusEvent(EVT_REFUSED, EVT_REASON_BAD_TARGETS);
+        requestRefused(EVT_REASON_BAD_TARGETS);
       }
     }
   }

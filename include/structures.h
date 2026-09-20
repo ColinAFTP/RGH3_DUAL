@@ -23,6 +23,10 @@ typedef struct __attribute__((packed)) {
     int16_t positions[NUM_GAPS];        // Stepper positions in tenths of a millimetre from home
     uint8_t numEvents;                  // Number of valid entries in events[]
     StatusEvent events[STATUS_MAX_EVENTS];
+    uint8_t refusedReason;              // Reason the last request was refused (EVT_REASON_ constant, 0 = none)
+    uint32_t ioReads;                   // Number of times CPU2 read the inputs from CPU1 over I2C
+    uint16_t ioFails;                   // ...and how many of those failed
+    uint16_t otherFails;                // Failed I2C transfers of every other kind (status, gaps, pattern, fault message)
 } StatusPacket;
 
 #endif

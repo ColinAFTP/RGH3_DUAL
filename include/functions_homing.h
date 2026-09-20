@@ -11,6 +11,7 @@ void homingService(bool moveFinished);  // Call every loop. moveFinished is the 
 bool homingActive();                    // True while a homing move (TeensyStep approach or direct pulse routine) is running
 int homingStage();                      // 0 = not homing, 1 = TeensyStep approach move, 2 = direct pulse stage
 uint16_t faultMask();                   // Bitmask of the spreaders that failed to home (bit = spreader number - 1)
+long cascadePositionSteps(int i);       // Estimated position of stepper i (steps from home) during the direct pulse stage, from the pulses counted. 0 if the start position was unknown
 uint8_t faultType();                    // FAULT_NONE, FAULT_HOMING or FAULT_OVERTRAVEL
 void overTravelService();               // Call every loop: stops the motion and raises a fault when an over travel sensor is on
 bool positionsKnown();                  // True once homing has set the stepper positions to 0 (and no fault has occurred since)

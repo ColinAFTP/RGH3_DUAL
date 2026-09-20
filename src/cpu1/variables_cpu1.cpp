@@ -31,3 +31,11 @@ bool statusFault = false;
 StatusPacket statusRing[STATUS_RING_SIZE];
 volatile uint8_t statusRingHead = 0;
 volatile uint8_t statusRingTail = 0;
+
+bool statusRefused = false;
+uint8_t statusRefusedReason = 0;
+uint8_t faultTypeShown = 0;
+bool cpu1Refused = false;
+uint8_t cpu1RefusedReason = 0;
+bool atTargetBlank = false;
+uint32_t atTargetBlankStart = 0;

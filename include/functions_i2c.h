@@ -13,5 +13,7 @@ int readIO();                           // Returns the 16 bit input word from CP
 bool writeFaultMask(uint16_t mask, uint8_t type);   // Sends the failed spreader bitmask and the fault type to CPU1. Returns false if the transfer failed
 int readPattern();                      // Returns the pattern selection (0 = home) from CPU1, or -1 if the transfer failed
 bool readGapPatterns();                 // Returns false if the I2C transfer failed (old data kept)
+void i2cCountOtherFail();               // Count a failed I2C transfer made outside this file (status packet)
+void i2cStats(uint32_t& reads, uint16_t& ioFails, uint16_t& otherFails);   // Failed transfer counters for the status packet
 
 #endif

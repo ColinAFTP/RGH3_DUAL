@@ -12,5 +12,8 @@ void cpu2StatusService();               // Call every loop: decodes the status p
 void logEvent(const char* fmt, ...);    // Add a line to the event log shown on the web page. Main loop context only, never from an interrupt
 void logInputChanges();                 // Call once per input sample: logs proxy input changes and counts glitches (changes that reverse within 5 ms)
 uint32_t inputGlitches();               // Number of input glitches seen since start
+bool cpu2Online();                      // CPU2 is sending its status (it is running)
+bool cpu2Lost();                        // CPU2 stopped reporting, or never reported within the boot grace time: this is a fault
+uint8_t cpu2RefusedReason();            // Why CPU2 refused the last request (EVT_REASON_ constant, 0 = not refused)
 
 #endif

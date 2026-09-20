@@ -12,7 +12,8 @@ constexpr int ADDR_SPEED = 105;
 constexpr int ADDR_RELAYS = 106;              // Each of the first 16 bits corresponds to the switching of the 16 relays
 constexpr int ADDR_MANUAL_PTR = 107;          // Pointer to which spreader will be moved in manual mode (1-9)
 constexpr int ADDR_FAULT_SPREADERS = 108;     // Bitmask of the spreaders that failed to home. Bit (n-1) is spreader n (spreader 5 is static so bit 4 is never set). Read only from the PLC. Cleared by a fault reset.
-constexpr int ADDR_FAULT_TYPE = 109;          // Fault type (FAULT_NONE, FAULT_HOMING or FAULT_OVERTRAVEL). For FAULT_OVERTRAVEL the bit in ADDR_FAULT_SPREADERS is spreader 1 (left) or 10 (right). Read only from the PLC
+constexpr int ADDR_FAULT_TYPE = 109;          // Fault type (FAULT_NONE, FAULT_HOMING, FAULT_OVERTRAVEL or FAULT_CPU2). For FAULT_OVERTRAVEL the bit in ADDR_FAULT_SPREADERS is spreader 1 (left) or 10 (right). Read only from the PLC
+constexpr int ADDR_REFUSED_REASON = 110;      // Why the last request was refused (EVT_REASON_ constants, 0 = not refused). Valid while the Move Refused status bit is on. Read only from the PLC
 
 // Pattern 1 gaps
 constexpr int ADDR_PATTERN_0_0 = 111;
@@ -84,6 +85,8 @@ const int ADDR_HOME = 117;              // Gripper is home: all nine home proxim
 const int ADDR_MOVE_DONE = 118;         // At target: the requested pattern move or homing has finished. Off while a move or homing is running
 const int ADDR_MANUAL_MODE = 119;       // Gripper is in manual mode
 const int ADDR_HOMING_FAULT = 120;      // Fault is active (a spreader failed to home, or an over travel sensor stopped the motion). ADDR_FAULT_TYPE says which, ADDR_FAULT_SPREADERS which spreaders. Cleared with ADDR_FAULT_RESET
+const int ADDR_MOVE_REFUSED = 121;      // The last request (pattern selection) was refused, see ADDR_REFUSED_REASON. Cleared by the next valid pattern change. At Target stays off for a refused request
+const int ADDR_CPU2_ONLINE = 122;       // CPU2 (the motion controller) is running and reporting to CPU1. If it stops, Fault (ADDR_HOMING_FAULT) turns on with fault type FAULT_CPU2
 
 // General constants
 constexpr bool DEBUG_STEPPER_CALC = false;  // Print stepper target calculations
@@ -124,6 +127,7 @@ constexpr uint16_t OVERTRAVEL_MASK = 0x0401;            // Input bits 0 and 10
 constexpr uint8_t FAULT_NONE = 0;
 constexpr uint8_t FAULT_HOMING = 1;                     // A spreader failed to home
 constexpr uint8_t FAULT_OVERTRAVEL = 2;                 // An over travel sensor turned on
+constexpr uint8_t FAULT_CPU2 = 3;                       // CPU2 stopped reporting to CPU1 (crashed, hung or not powered). Clears by itself when CPU2 is back
 
 // Input filter (CPU1). Each input must hold its new value for this many consecutive 1 ms samples before it counts. Removes single-sample noise
 // pulses (seen on the bench) at the cost of this many milliseconds of latency: about 0.02 mm per sample at the 1500 steps/s homing rate.
@@ -156,6 +160,14 @@ constexpr int HOME_MAX_STEPS = MAX_STEPS + 500;         // A stepper that emits 
 constexpr uint32_t HOME_TIMEOUT_MS = 30000;             // Overall time limit for the direct pulse routine
 constexpr int HOME_IO_FAIL_LIMIT = 50;                  // Consecutive failed I2C reads of the sensors before homing is aborted with a fault. Pulses stop at the first failed read
 
+// Watchdog and CPU2 link supervision
+constexpr uint32_t WATCHDOG_TIMEOUT_MS = 2000;          // Both CPUs reset themselves if their main loop does not run for this long (multiple of 500 ms)
+constexpr uint32_t CPU2_TIMEOUT_MS = 1500;              // CPU1 declares CPU2 lost (Fault, type FAULT_CPU2) if no status arrives for this long
+constexpr uint32_t CPU2_BOOT_GRACE_MS = 40000;          // ...but after a power up CPU2 gets this long to send its first status (it waits 5 s for the drivers and up to 20 s for CPU1)
+constexpr uint32_t HOME_SENSOR_TIMEOUT_US = 20000;      // The direct pulse interrupt stops all pulses if the last good sensor read is older than this
+constexpr int DEBUG_HANG_TEST_S = 0;                    // TEST ONLY. 0 = off. Otherwise the CPU hangs in its main loop after this many seconds, to test the watchdog. Keep 0
+constexpr bool DEBUG_STALL_TEST = false;                // TEST ONLY. CPU2 delays its homing loop by 40 ms once a second, to test the pulse timeout above. Keep false
+
 // I2C commands from CPU2 (master) to CPU1 (slave, address 0x40)
 constexpr uint8_t I2C_CMD_IO = 1;                       // Request: 16 bit input word (uint16_t)
 constexpr uint8_t I2C_CMD_GAPS = 2;                     // Request: all gap patterns and the stepper speed (PatternPacket)
@@ -176,7 +188,7 @@ constexpr uint8_t STATE_FAULT = 4;                      // Homing fault active
 constexpr uint8_t STATE_UNKNOWN_POS = 5;                // Standing still but positions unknown (not homed yet)
 
 // Event codes sent by CPU2 (StatusEvent.code) and the meaning of the argument
-constexpr uint8_t EVT_BOOT = 1;                         // CPU2 started
+constexpr uint8_t EVT_BOOT = 1;                          // CPU2 started. Arg = 1 if the reset was caused by the watchdog, 0 otherwise
 constexpr uint8_t EVT_POWERUP_HOME = 2;                 // Power up with all home sensors on
 constexpr uint8_t EVT_POWERUP_SEARCH = 3;               // Power up without all home sensors on, search home started
 constexpr uint8_t EVT_TRIGGER = 4;                      // Start move trigger seen. Arg = pattern
@@ -190,6 +202,7 @@ constexpr uint8_t EVT_FAULT_RESET = 11;                 // Fault reset, search h
 constexpr uint8_t EVT_REFUSED = 12;                     // Request refused. Arg = EVT_REASON_ constant
 constexpr uint8_t EVT_IO_FAIL = 13;                     // Home sensors could not be read over I2C, pulses stopped
 constexpr uint8_t EVT_OVERTRAVEL = 14;                  // Over travel sensor stopped the motion. Arg = spreader bitmask (bit 0 = spreader 1, bit 9 = spreader 10)
+constexpr uint8_t EVT_PULSE_TIMEOUT = 15;               // The direct pulse interrupt stopped the pulses because the sensor data was too old (main loop stalled)
 
 constexpr int EVT_REASON_BUSY = 1;                      // Already moving or homing
 constexpr int EVT_REASON_FAULT = 2;                     // Homing fault active
@@ -219,7 +232,7 @@ constexpr int OUTPUT_A4 = 30;                 // Over travel: CPU1 holds this hi
 constexpr int INPUT_B1 = 29;                  // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors
 constexpr int INPUT_B2 = 28;                  // At target: high when CPU2 has finished a move or homing, low while it is moving or homing
 constexpr int INPUT_B3 = 27;                  // Fault: high while CPU2 has a fault (homing failed or over travel). The spreaders and fault type are sent over I2C (I2C_CMD_FAULT_MASK)
-constexpr int INPUT_B4 = 26;                  // Spare
+constexpr int INPUT_B4 = 26;                  // Request refused: high after CPU2 refused a request (reason in the status packet). Cleared when the next request arrives
 
 // IP address DIP switch pins
 constexpr int DIP_SW1 = 39;
@@ -262,6 +275,6 @@ constexpr int INPUT_A4 = 19;                  // Over travel: high while an over
 constexpr int OUTPUT_B1 = 20;                 // Reserved, not used. The Home signal is calculated by CPU1 from the home proximity sensors
 constexpr int OUTPUT_B2 = 21;                 // At target: set high when a move or homing has finished, cleared when a move or homing starts
 constexpr int OUTPUT_B3 = 22;                 // Fault: set high while a fault (homing failed or over travel) is active, until reset with INPUT_A3
-constexpr int OUTPUT_B4 = 26;                 // Spare
+constexpr int OUTPUT_B4 = 26;                 // Request refused: set high when a request is refused (see EVT_REASON_ constants), cleared when the next request arrives
 
 #endif

@@ -1,5 +1,6 @@
 #include "constants.h"
 #include "functions_io.h"
+#include "functions_web.h"
 #include "variables_cpu1.h"
 
 // Initialise the shift registers after the pin modes have been set
@@ -103,22 +104,56 @@ void relayControl(word outputData) {
   digitalWrite(RELAY_DATA_LATCH_PIN, 1);
 }
 
-// Update the Home, At Target and Homing Fault status bits, and the two feedback relays.
-// Home is calculated here from the home proximity sensors: all nine on and no fault.
-// At Target and the fault come from CPU2 on the hardwired lines.
+// Update the Home, At Target, Fault, Move Refused and CPU2 Online status bits, the fault type and refused reason registers,
+// and the two feedback relays.
+//  - Home: all nine home sensors on, no fault, and CPU2 running.
+//  - At Target: CPU2 says so, CPU2 is running, and it is not blanked. It is blanked from the moment the PLC selects a new pattern
+//    until CPU2 has dropped its own line, so the PLC never sees the old "at target" after a new request.
+//  - Fault: CPU2 has a fault (homing failed or over travel), or CPU2 is lost.
+//  - Move Refused: CPU1 or CPU2 refused the last request. The reason is in register ADDR_REFUSED_REASON.
 void feedbackCheck() {
-  bool atTarget = digitalRead(INPUT_B2);
-  bool fault = digitalRead(INPUT_B3);
-  bool atHome = ((inputData & PROXY_ALL_MASK) == PROXY_ALL_MASK) && !fault;
+  bool cpu2Ok = cpu2Online();
+  bool cpu2Fault = digitalRead(INPUT_B3);
+  bool fault = cpu2Fault || cpu2Lost();
+
+  // At Target blanking ends when CPU2 has dropped its line, or after 500 ms (the length of the start move pulse)
+  bool b2 = digitalRead(INPUT_B2);
+  if (atTargetBlank && (!b2 || millis() - atTargetBlankStart > 500)) {
+    atTargetBlank = false;
+  }
+  bool atTarget = b2 && !atTargetBlank && cpu2Ok;
+  bool atHome = ((inputData & PROXY_ALL_MASK) == PROXY_ALL_MASK) && !fault && cpu2Ok;
+
+  // The refused flag: from CPU1 (invalid pattern) or from CPU2 (line B4). The reason comes with CPU2's next status.
+  bool refused = cpu1Refused || digitalRead(INPUT_B4);
+  uint8_t reason = cpu1Refused ? cpu1RefusedReason : (refused ? cpu2RefusedReason() : 0);
+  uint8_t faultType = cpu2Lost() ? FAULT_CPU2 : faultTypeRx;
+  if (!fault) faultType = FAULT_NONE;
+
   statusHome = atHome;
   statusAtTarget = atTarget;
   statusFault = fault;
+  statusRefused = refused;
+  statusRefusedReason = reason;
 
   // Update the Modbus discrete status bits
   modbusServer.discreteInputWrite(ADDR_HOME, atHome);
   modbusServer.discreteInputWrite(ADDR_MOVE_DONE, atTarget);
   modbusServer.discreteInputWrite(ADDR_HOMING_FAULT, fault);
+  modbusServer.discreteInputWrite(ADDR_MOVE_REFUSED, refused);
+  modbusServer.discreteInputWrite(ADDR_CPU2_ONLINE, cpu2Ok);
 
+  // The two registers are only written when they change
+  if (faultType != faultTypeShown) {
+    faultTypeShown = faultType;
+    modbusServer.holdingRegisterWrite(ADDR_FAULT_TYPE, faultType);
+  }
+  static uint8_t reasonWritten = 255;
+  if (reason != reasonWritten) {
+    reasonWritten = reason;
+    modbusServer.holdingRegisterWrite(ADDR_REFUSED_REASON, reason);
+  }
+  
   // Set relay 1 (bit 0) if home and relay 2 (bit 1) if at target
   word newRelayData = relayData;
   if (atHome) {
@@ -131,7 +166,7 @@ void feedbackCheck() {
   } else {
     newRelayData &= ~0x02;
   }
-
+  
   // Write the updated relay data back to the holding register so the PLC can see it
   if (newRelayData != relayData) {
     relayData = newRelayData;

@@ -78,16 +78,16 @@ void jp(const char* fmt, ...) {
 
 void buildStatus() {
   bodyLen = 0;
-  uint32_t now = millis();
-  bool cpu2Ok = cpu2StatusMs != 0 && (now - cpu2StatusMs) < 1500;
+  bool cpu2Ok = cpu2Online();
   jp("{\"up\":%lu,\"loopMax\":%lu,\"loopAvg\":%lu,\"plc\":%d,\"home\":%d,\"target\":%d,\"fault\":%d,\"mask\":%u,"
-     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"ftype\":%u,\"inputs\":%u,\"relays\":%u,",
-     (unsigned long)now, (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
+     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"ftype\":%u,\"refused\":%d,\"rreason\":%u,\"inputs\":%u,\"relays\":%u,",
+     (unsigned long)millis(), (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
      ethernetClient.connected() ? 1 : 0, statusHome ? 1 : 0, statusAtTarget ? 1 : 0, statusFault ? 1 : 0,
-     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(), (unsigned)faultTypeRx, (unsigned)inputData, (unsigned)relayData);
-  jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"pos\":[",
+     (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(),
+     (unsigned)faultTypeShown, statusRefused ? 1 : 0, (unsigned)statusRefusedReason, (unsigned)inputData, (unsigned)relayData);
+  jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"ioReads\":%lu,\"ioFails\":%u,\"otherFails\":%u,\"pos\":[",
      cpu2Ok ? 1 : 0, (unsigned long)cpu2RxCount, (unsigned)cpu2Status.state, (unsigned)(cpu2Status.flags & 1),
-     (unsigned)cpu2Status.faultMask);
+     (unsigned)cpu2Status.faultMask, (unsigned long)cpu2Status.ioReads, (unsigned)cpu2Status.ioFails, (unsigned)cpu2Status.otherFails);
   for (int i = 0; i < NUM_GAPS; i++) {
     jp("%s%d", i ? "," : "", (int)cpu2Status.positions[i]);
   }
@@ -191,7 +191,7 @@ const char* reasonText(int reason) {
 // Turn one CPU2 event into an event log line
 void logCpu2Event(const StatusEvent& e) {
   switch (e.code) {
-    case EVT_BOOT: logEvent("CPU2 started"); break;
+    case EVT_BOOT: logEvent(e.arg ? "CPU2 started after a WATCHDOG RESET (it had hung)" : "CPU2 started"); break;
     case EVT_POWERUP_HOME: logEvent("CPU2 power up: all home sensors on, gripper is home"); break;
     case EVT_POWERUP_SEARCH: logEvent("CPU2 power up: not home, search home started"); break;
     case EVT_TRIGGER: logEvent("CPU2 start move trigger, pattern %d", e.arg); break;
@@ -217,6 +217,7 @@ void logCpu2Event(const StatusEvent& e) {
     case EVT_FAULT_RESET: logEvent("CPU2 fault reset, search home started"); break;
     case EVT_REFUSED: logEvent("CPU2 refused request: %s", reasonText(e.arg)); break;
     case EVT_IO_FAIL: logEvent("CPU2 cannot read the home sensors over I2C, pulses stopped"); break;
+    case EVT_PULSE_TIMEOUT: logEvent("CPU2 homing pulses stopped: sensor data too old (main loop stalled)"); break;
     case EVT_OVERTRAVEL: {
       char list[24] = "";
       if (e.arg & 1) strncat(list, " S1", sizeof(list) - strlen(list) - 1);
@@ -433,4 +434,20 @@ void logInputChanges() {
 
 uint32_t inputGlitches() {
   return inputGlitchCount;
+}
+
+// CPU2 is online while its status keeps arriving
+bool cpu2Online() {
+  return cpu2StatusMs != 0 && (millis() - cpu2StatusMs) < CPU2_TIMEOUT_MS;
+}
+
+// CPU2 is lost if it stopped reporting. After a power up it gets CPU2_BOOT_GRACE_MS to send its first status.
+bool cpu2Lost() {
+  if (cpu2StatusMs != 0) return !cpu2Online();
+  return millis() > CPU2_BOOT_GRACE_MS;
+}
+
+// Why CPU2 refused the last request (0 = not refused), from its last status
+uint8_t cpu2RefusedReason() {
+  return cpu2Status.refusedReason;
 }

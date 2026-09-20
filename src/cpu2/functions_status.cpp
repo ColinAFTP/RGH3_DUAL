@@ -4,6 +4,7 @@
 
 #include "constants.h"
 #include "functions_homing.h"
+#include "functions_i2c.h"
 #include "functions_status.h"
 #include "functions_steppers.h"
 #include "structures.h"
@@ -16,6 +17,7 @@ StatusEvent eventQueue[EVENT_QUEUE_SIZE];
 int eventHead = 0;                      // Next free slot
 int eventCount = 0;                     // Events waiting to be sent
 uint32_t lastSendTime = 0;
+uint8_t refusedReason = 0;              // Reason the last request was refused, 0 = not refused
 
 // The state that is reported to CPU1
 uint8_t currentState() {
@@ -39,10 +41,18 @@ void statusEvent(uint8_t code, int16_t arg) {
   eventCount++;
 }
 
-void statusService() {
-  // The direct pulse homing stage polls the home sensors over I2C as fast as it can, so leave the bus to it
-  if (homingStage() == 2) return;
+void requestStarted() {
+  refusedReason = 0;
+  digitalWrite(OUTPUT_B4, LOW);
+}
 
+void requestRefused(int reason) {
+  refusedReason = (uint8_t)reason;
+  digitalWrite(OUTPUT_B4, HIGH);
+  statusEvent(EVT_REFUSED, reason);
+}
+
+void statusService() {
   uint32_t now = millis();
   bool due = (now - lastSendTime >= STATUS_PERIOD_MS) || (eventCount > 0 && now - lastSendTime >= 50);
   if (!due) return;
@@ -53,9 +63,16 @@ void statusService() {
   packet.flags = positionsKnown() ? 1 : 0;
   packet.faultMask = faultMask();
   packet.faultType = faultType();
-  updateStepperPositions();
-  for (int i = 0; i < NUM_GAPS; i++) {
-    packet.positions[i] = (int16_t)lroundf(stepperPositions[i] * 10.0f / STEPS_PER_MM);
+  if (homingStage() == 2) {
+    // The direct pulse stage does not use TeensyStep, so its positions are estimated from the pulses counted
+    for (int i = 0; i < NUM_GAPS; i++) {
+      packet.positions[i] = (int16_t)lroundf(cascadePositionSteps(i) * 10.0f / STEPS_PER_MM);
+    }
+  } else {
+    updateStepperPositions();
+    for (int i = 0; i < NUM_GAPS; i++) {
+      packet.positions[i] = (int16_t)lroundf(stepperPositions[i] * 10.0f / STEPS_PER_MM);
+    }
   }
 
   // The oldest events go first. They are only removed from the queue once CPU1 has acknowledged the transfer.
@@ -65,11 +82,20 @@ void statusService() {
   for (int i = 0; i < STATUS_MAX_EVENTS; i++) {
     packet.events[i] = (i < n) ? eventQueue[(tail + i) % EVENT_QUEUE_SIZE] : StatusEvent{0, 0};
   }
+  packet.refusedReason = refusedReason;
+  uint32_t ioReads;
+  uint16_t ioFails, otherFails;
+  i2cStats(ioReads, ioFails, otherFails);
+  packet.ioReads = ioReads;
+  packet.ioFails = ioFails;
+  packet.otherFails = otherFails;
 
   Wire2.beginTransmission(0x40);
   Wire2.write(I2C_CMD_STATUS);
   Wire2.write((const uint8_t*)&packet, sizeof(packet));
   if (Wire2.endTransmission() == 0) {
     eventCount -= n;
+  } else {
+    i2cCountOtherFail();
   }
 }
