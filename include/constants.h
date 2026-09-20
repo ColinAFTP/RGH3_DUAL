@@ -237,17 +237,18 @@ constexpr int INPUT_B2 = 28;                  // At target: high when CPU2 has f
 constexpr int INPUT_B3 = 27;                  // Fault: high while CPU2 has a fault (homing failed or over travel). The spreaders and fault type are sent over I2C (I2C_CMD_FAULT_MASK)
 constexpr int INPUT_B4 = 26;                  // Request refused: high after CPU2 refused a request (reason in the status packet). Cleared when the next request arrives
 
-// IP address DIP switch pins
-constexpr int DIP_SW1 = 39;
-constexpr int DIP_SW2 = 40;
-constexpr int DIP_SW3 = 41;
+// DIP switches (CPU1). The numbers are the labels printed on the PCB. A switch is ON when its pin is HIGH.
+// The IP address number is DIP 2 x 2 + DIP 1: 0 = 192.168.2.51, 1 = .52, 2 = .53, 3 = .54. It is read once at power up.
+constexpr int DIP_PCB1_PIN = 41;                    // PCB DIP 1: IP address, least significant bit
+constexpr int DIP_PCB2_PIN = 40;                    // PCB DIP 2: IP address, most significant bit
+constexpr int DIP_PCB3_PIN = 39;                    // PCB DIP 3: manual mode
 
 // Manual mode (see functions_manual.cpp on CPU2). Manual mode is on while the manual DIP switch is on OR the PLC has set coil ADDR_MANUAL.
 // The DIP switch overrides the PLC: it stops any motion at once, and the PLC cannot leave manual mode while the switch is on.
 // In manual mode the PLC moves ONE spreader at a time: holding register ADDR_MANUAL_PTR = spreader number (1 to 10, not 5), coil ADDR_MANUAL_OPN
 // moves it forward (open) and coil ADDR_MANUAL_CLS backward (close), for as long as the coil is on. Spreaders further out that are touching it are pushed along.
 // Leaving manual mode starts an automatic home. Pattern requests are refused while manual mode is on.
-constexpr int DIP_MANUAL_PIN = DIP_SW3;                 // The manual mode DIP switch (CPU1)
+constexpr int DIP_MANUAL_PIN = DIP_PCB3_PIN;              // The manual mode DIP switch (PCB DIP 3, CPU1)
 constexpr int DIP_MANUAL_ACTIVE_LEVEL = 1;              // Pin level when the switch is ON: 1 = HIGH, 0 = LOW. Change to 0 if the switch is wired the other way round
 constexpr uint32_t DIP_DEBOUNCE_MS = 30;                // The DIP switch must be stable this long before it counts
 constexpr int MANUAL_PULSE_RATE = 1500;                 // Manual movement speed in steps/s (direct pulses, same engine as homing)

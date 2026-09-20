@@ -30,10 +30,10 @@ IPAddress ips[8] = {ip1, ip2, ip3, ip4, ip5, ip6, ip7, ip8};
 void modbusSetup() {
 
   // Set up the inputs from the DIP switches
-  pinMode(DIP_SW1, INPUT);
-  pinMode(DIP_SW2, INPUT);
+  pinMode(DIP_PCB1_PIN, INPUT_PULLDOWN);
+  pinMode(DIP_PCB2_PIN, INPUT_PULLDOWN);
   
-  int dipSelection = digitalRead(DIP_SW2) * 2 + digitalRead(DIP_SW1);
+  int dipSelection = digitalRead(DIP_PCB2_PIN) * 2 + digitalRead(DIP_PCB1_PIN);   // PCB DIP 2 x 2 + PCB DIP 1
   Serial.print("IP address selected: ");
   Serial.println(dipSelection);
 

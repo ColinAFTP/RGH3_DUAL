@@ -111,7 +111,7 @@ uint8_t manualSpreader() {
   return spreader;
 }
 
-// The raw levels of the three DIP switch pins, for the web page: bit 0 = DIP_SW1 (IP address), bit 1 = DIP_SW2 (IP address), bit 2 = DIP_SW3 (manual mode)
+// The raw levels of the three DIP switches, for the web page: bit 0 = PCB DIP 1 (IP address bit 0), bit 1 = PCB DIP 2 (IP address bit 1), bit 2 = PCB DIP 3 (manual mode)
 uint8_t manualDipPinsRaw() {
-  return (digitalRead(DIP_SW1) ? 1 : 0) | (digitalRead(DIP_SW2) ? 2 : 0) | (digitalRead(DIP_SW3) ? 4 : 0);
+  return (digitalRead(DIP_PCB1_PIN) ? 1 : 0) | (digitalRead(DIP_PCB2_PIN) ? 2 : 0) | (digitalRead(DIP_PCB3_PIN) ? 4 : 0);
 }
