@@ -144,7 +144,9 @@ void loop()
   static bool plcWasConnected = false;
   bool plcConnected = ethernetClient.connected();
   if (plcConnected != plcWasConnected) {
-    logEvent(plcConnected ? "PLC connected" : "PLC disconnected");
+    if (!plcConnected) {
+      logEvent("Modbus client %s disconnected", plcRemoteText);   // The connect is logged, with its address, in ethernetConnect()
+    }
     plcWasConnected = plcConnected;
   }
 

@@ -19,6 +19,7 @@ word relayDataPrevious = 0;
 int speedData = 0;
 int speedDataPrevious = 0;
 uint32_t lastModbusRequestMs = 0;
+char plcRemoteText[24] = "";
 volatile uint8_t manualFlagsShared = 0;
 volatile uint8_t manualSpreaderShared = 0;
 uint32_t tickerTime = 0;

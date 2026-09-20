@@ -98,25 +98,43 @@ void modbusSetup() {
   modbusServer.configureHoldingRegisters(101, 60);
 }
 
+// Write "a.b.c.d:port" for a client into text (at least 22 characters). The address is only valid once the client has been used as a bool.
+static void clientText(EthernetClient& client, char* text, size_t size) {
+  bool valid = client;                            // Fills in the peer address
+  IPAddress ip = client.remoteIP();
+  if (!valid) {
+    snprintf(text, size, "unknown");
+    return;
+  }
+  snprintf(text, size, "%u.%u.%u.%u:%u", ip[0], ip[1], ip[2], ip[3], (unsigned)client.remotePort());
+}
+
 // Look for a new Modbus TCP connection. Called every loop pass.
 // accept() returns a connected client at once. available() would wait up to 10 s for the client's first bytes,
 // freezing the whole loop for a client that connects and sends nothing.
 // Only one Modbus client is served at a time. A PLC that loses power or its network cable never closes its connection, so the old
 // connection would stay "connected" for ever and lock the new one out. So a new client replaces the old one if the old one is closed or has sent
 // no request for MODBUS_IDLE_TAKEOVER_MS. An active client is never displaced: the new connection is closed instead (the client retries).
+// Every connection and refusal is logged with the address it came from.
 void ethernetConnect() {
   static uint32_t lastNoClientMsg = 0;            // timestamp of last "no client" message
   const uint32_t interval = 5000;                 // 5 seconds
 
   EthernetClient newClient = ethernetServer.accept();
   if (newClient.connected()) {
+    char newText[24];
+    clientText(newClient, newText, sizeof(newText));
     bool oldConnected = ethernetClient.connected();
     if (!oldConnected || millis() - lastModbusRequestMs > MODBUS_IDLE_TAKEOVER_MS) {
       if (oldConnected) {
         ethernetClient.stop();                    // Drop the dead or silent old connection
-        logEvent("PLC reconnected: the old connection was silent and has been dropped");
+        logEvent("Modbus client %s replaced the silent client %s", newText, plcRemoteText);
+      } else {
+        logEvent("Modbus client connected from %s", newText);
       }
       ethernetClient = newClient;                 // Store globally
+      strncpy(plcRemoteText, newText, sizeof(plcRemoteText) - 1);
+      plcRemoteText[sizeof(plcRemoteText) - 1] = 0;
       modbusServer.accept(ethernetClient);
       lastModbusRequestMs = millis();
       Serial.println("Ethernet client connected");
@@ -125,7 +143,7 @@ void ethernetConnect() {
       static uint32_t lastRefusedLog = 0;
       if (millis() - lastRefusedLog > 5000) {     // Not more than one log line every 5 s
         lastRefusedLog = millis();
-        logEvent("Modbus connection refused: another client is active");
+        logEvent("Modbus connection from %s refused: %s is active", newText, plcRemoteText);
       }
     }
   } else if (!ethernetClient.connected()) {

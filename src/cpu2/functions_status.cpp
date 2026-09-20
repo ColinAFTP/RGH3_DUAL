@@ -68,7 +68,9 @@ void statusService() {
   if (manualActive()) {
     // Manual mode counts the pulses of the jog that is running
     for (int i = 0; i < NUM_GAPS; i++) {
-      packet.positions[i] = (int16_t)lroundf(manualPositionSteps(i) * 10.0f / STEPS_PER_MM);
+      long steps = manualPositionSteps(i);
+      if (steps < 0) steps = 0;                       // While the positions are unknown a closing jog counts below zero: show 0
+      packet.positions[i] = (int16_t)lroundf(steps * 10.0f / STEPS_PER_MM);
     }
   } else if (homingStage() == 2) {
     // The direct pulse stage does not use TeensyStep, so its positions are estimated from the pulses counted
