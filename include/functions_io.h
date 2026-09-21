@@ -9,6 +9,7 @@ void initCPU1HardIO();                  // Initialise the hardwired CPU1/CPU2 si
 void inputsCheck();                     // Sample the 16 inputs from the input shift registers into inputData
 void relayControl(word outputData);     // Shift the 16 relay bits out to the relay shift registers
 void feedbackCheck();                   // Update the Home, At Target and Homing Fault status bits and the two feedback relays
+void relayTestService();                // Relay test: while the PLC sets coil ADDR_RELAY_TEST the relays switch on one at a time, 1 to 16, round and round
 
 // CPU2, see src/cpu2/functions_io_cpu2.cpp
 void initCPU2HardIO();                  // Initialise the hardwired CPU1/CPU2 signals in CPU2

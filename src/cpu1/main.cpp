@@ -193,20 +193,22 @@ void loop()
     patternSelectionPrevious = patternSelection;
   }
 
-  // Check for relay updates
+  // Relays: the PLC controls them through register ADDR_RELAYS. Nothing else does, except the relay test (coil ADDR_RELAY_TEST).
   relayCheck();
+  relayTestService();
 
-  // Check feedback signals (at home, at target) and update relay bits
+  // Check the feedback signals from CPU2 (Home, At Target, Fault) and update the status bits
   feedbackCheck();
   static bool prevHome = false, prevTarget = false, prevFault = false;
   if (statusHome != prevHome) { logEvent("Home %s", statusHome ? "ON" : "OFF"); prevHome = statusHome; }
   if (statusAtTarget != prevTarget) { logEvent("At target %s", statusAtTarget ? "ON" : "OFF"); prevTarget = statusAtTarget; }
   if (statusFault != prevFault) { logEvent("Fault %s", statusFault ? "ON" : "cleared"); prevFault = statusFault; }
 
-  if (relayData != relayDataPrevious) {
+  if (!relayTestActive && relayData != relayDataPrevious) {
     Serial.print("   | New relay data: ");
     Serial.println(relayData, BIN);
     relayControl(relayData);
+    relayOutputShown = relayData;
     relayDataPrevious = relayData;
   }
 

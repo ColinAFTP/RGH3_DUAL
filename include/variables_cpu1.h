@@ -25,6 +25,8 @@ extern int patternSelection;
 extern int patternSelectionPrevious;
 extern word relayData;
 extern word relayDataPrevious;
+extern word relayOutputShown;           // What the relays are actually set to (the PLC bits, or the single relay of the relay test)
+extern bool relayTestActive;            // The relay test is running
 extern int speedData;
 extern int speedDataPrevious;
 extern uint32_t lastModbusRequestMs;   // millis() when the last Modbus request from the PLC was answered

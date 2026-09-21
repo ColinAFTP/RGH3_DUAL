@@ -81,11 +81,11 @@ void buildStatus() {
   bodyLen = 0;
   bool cpu2Ok = cpu2Online();
   jp("{\"up\":%lu,\"loopMax\":%lu,\"loopAvg\":%lu,\"plc\":%d,\"home\":%d,\"target\":%d,\"fault\":%d,\"mask\":%u,"
-     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"ftype\":%u,\"refused\":%d,\"rreason\":%u,\"inputs\":%u,\"relays\":%u,",
+     "\"pattern\":%d,\"speed\":%d,\"tick\":%u,\"glitches\":%lu,\"ftype\":%u,\"refused\":%d,\"rreason\":%u,\"inputs\":%u,\"relays\":%u,\"rtest\":%d,",
      (unsigned long)millis(), (unsigned long)publishedMaxUs, (unsigned long)publishedAvgUs,
      ethernetClient.connected() ? 1 : 0, statusHome ? 1 : 0, statusAtTarget ? 1 : 0, statusFault ? 1 : 0,
      (unsigned)faultMaskRx, patternSelection, stepperSpeed, (unsigned)secondTicker, (unsigned long)inputGlitches(),
-     (unsigned)faultTypeShown, statusRefused ? 1 : 0, (unsigned)statusRefusedReason, (unsigned)inputData, (unsigned)relayData);
+     (unsigned)faultTypeShown, statusRefused ? 1 : 0, (unsigned)statusRefusedReason, (unsigned)inputData, (unsigned)relayOutputShown, relayTestActive ? 1 : 0);
   jp("\"cpu2\":{\"ok\":%d,\"rx\":%lu,\"state\":%u,\"known\":%u,\"mask\":%u,\"ioReads\":%lu,\"ioFails\":%u,\"otherFails\":%u,\"pos\":[",
      cpu2Ok ? 1 : 0, (unsigned long)cpu2RxCount, (unsigned)cpu2Status.state, (unsigned)(cpu2Status.flags & 1),
      (unsigned)cpu2Status.faultMask, (unsigned long)cpu2Status.ioReads, (unsigned)cpu2Status.ioFails, (unsigned)cpu2Status.otherFails);

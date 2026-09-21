@@ -104,8 +104,7 @@ void relayControl(word outputData) {
   digitalWrite(RELAY_DATA_LATCH_PIN, 1);
 }
 
-// Update the Home, At Target, Fault, Move Refused and CPU2 Online status bits, the fault type and refused reason registers,
-// and the two feedback relays.
+// Update the Home, At Target, Fault, Move Refused and CPU2 Online status bits, and the fault type and refused reason registers.
 //  - Home: all nine home sensors on, no fault, and CPU2 running.
 //  - At Target: CPU2 says so, CPU2 is running, and it is not blanked. It is blanked from the moment the PLC selects a new pattern
 //    until CPU2 has dropped its own line, so the PLC never sees the old "at target" after a new request.
@@ -153,24 +152,39 @@ void feedbackCheck() {
     reasonWritten = reason;
     modbusServer.holdingRegisterWrite(ADDR_REFUSED_REASON, reason);
   }
-  
-  // Set relay 1 (bit 0) if home and relay 2 (bit 1) if at target
-  word newRelayData = relayData;
-  if (atHome) {
-    newRelayData |= 0x01;
-  } else {
-    newRelayData &= ~0x01;
-  }
-  if (atTarget) {
-    newRelayData |= 0x02;
-  } else {
-    newRelayData &= ~0x02;
-  }
-  
-  // Write the updated relay data back to the holding register so the PLC can see it
-  if (newRelayData != relayData) {
-    relayData = newRelayData;
-    modbusServer.holdingRegisterWrite(ADDR_RELAYS, relayData);
-  }
 }
 
+
+// Relay test (coil ADDR_RELAY_TEST, set by the PLC): while it is on, the relays are switched on one at a time, relay 1 to relay 16, and round again,
+// RELAY_TEST_STEP_MS each. The relay bits from the PLC (register ADDR_RELAYS) are ignored during the test and applied again when the coil is cleared.
+// Relay n is bit n-1 of the register.
+void relayTestService() {
+  static bool running = false;
+  static int step = 0;
+  static uint32_t stepStart = 0;
+
+  bool test = modbusServer.coilRead(ADDR_RELAY_TEST) != 0;
+  if (test) {
+    if (!running) {
+      running = true;
+      relayTestActive = true;
+      step = 0;
+      stepStart = millis();
+      relayOutputShown = 1;
+      relayControl(relayOutputShown);
+      logEvent("Relay test started");
+    } else if (millis() - stepStart >= RELAY_TEST_STEP_MS) {
+      step = (step + 1) % 16;
+      stepStart = millis();
+      relayOutputShown = (word)(1u << step);
+      relayControl(relayOutputShown);
+    }
+  } else if (running) {
+    running = false;
+    relayTestActive = false;
+    relayOutputShown = relayData;                 // Back to what the PLC wants
+    relayControl(relayOutputShown);
+    relayDataPrevious = relayData;
+    logEvent("Relay test stopped");
+  }
+}

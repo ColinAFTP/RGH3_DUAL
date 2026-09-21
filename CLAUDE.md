@@ -190,7 +190,7 @@ Everything below was found by reviewing the whole code base; none of it is fixed
 11. Manual mode / jog is not implemented (coils 104-106, register 107, DIP switch, INPUT_A2/OUTPUT_A2 exist). It is very useful for commissioning and for recovering from a jam.
 12. Gap resolution is whole mm (16-bit registers). Decide whether 0.1 mm scaling is needed before the PLC program is written (changing it later changes the PLC).
 13. Stuck-on proximity sensor is not detected (spreader thinks it is home). Optional plausibility check: at a pattern with a gap of several mm the matching proxy must be OFF.
-14. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, coil 101 homing (left in place on purpose, revisit), input registers 101-110 unused. Relays 1 and 2 are overwritten by Home / At Target: the PLC must not use them.
+14. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, coil 101 homing (left in place on purpose, revisit), input registers 101-110 unused. (Relays 1 and 2 are no longer overwritten: see the relay section at the end.)
 15. Power-up auto-home moves the motors without a PLC command (Colin's requirement). Make sure this is acceptable for the real machine (guarding, person nearby).
 
 **Still to tune / verify on the real gripper**: HOME_PULSE_RATE, HOME_START_RATE, HOME_RAMP_MS, HOME_APPROACH_MM, INIT_ACCEL, MAX_SPEED, PST8072 pulse width and direction setup (datasheet not found), INPUT_FILTER_SAMPLES for the real sensor cables, enable OVERTRAVEL_ENABLED once proxies 1 and 11 are wired. There are no automated tests: everything so far was bench-tested on the desk board with simulated proxies and no motors.
@@ -238,7 +238,7 @@ Note for the PLC programmer: if the PLC connects while another Modbus master (fo
 
 **C. Code still to write**
 10. Stuck-on proximity sensor detection (optional plausibility check: with a gap of several mm the matching proxy must be OFF).
-11. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, input registers 101-110 (unused). The PLC must not use relays 1 and 2 (overwritten by Home / At Target).
+11. Unimplemented Modbus items: coil 103 relay test, holding 102 home counts, input registers 101-110 (unused). (Relays 1 and 2 are free for the PLC now: see the relay section at the end.)
 
 **D. Still to investigate or test**
 12. I2C reliability: external pull-ups on pins 24/25 (1 MHz bus)? Measured 4 failed sensor reads in ~21,650; the Wire library also printed "Timed out waiting for transfer to finish".
@@ -303,3 +303,9 @@ Root cause: the web server (port 80) and the Modbus server (port 502) share the 
 How it was found: the address logging (a repeated "disconnected" line with the same stale address and NO matching "connected" line while Edge polled). It did not reproduce with a `curl` loop from the VM, only with the real browser.
 Fix (`src/cpu1/main.cpp`): when the client disconnects, `ethernetClient.stop()` and `ethernetClient = EthernetClient();` so the object no longer refers to any socket. Verified: 4 minutes with no phantom events, and connect/leave, silent-client takeover and active-client refusal all still work.
 Lesson: any object that holds a socket number must be released (`stop()` and reset) as soon as its connection ends. The same applies to `webClient` (the web server): it is only used after being reassigned at the next accept, so it is safe as written, but keep it that way.
+
+## Relays are under PLC control only; relay test (2026-09-21, Colin's decision)
+
+- Home and At Target no longer switch relay 1 and relay 2 (removed from `feedbackCheck()`): the relays are controlled ONLY by the PLC through holding register 106 (`ADDR_RELAYS`): bit 0 = relay 1 ... bit 15 = relay 16. The status bits stay on discrete inputs 117/118 as before. Any earlier note saying the PLC must not use relays 1 and 2 is obsolete.
+- Relay test = coil 103 (`ADDR_RELAY_TEST`): while the PLC keeps it on, CPU1 switches the relays on ONE AT A TIME, relay 1 to 16, then round again (`RELAY_TEST_STEP_MS` = 500 ms each, so 8 s per round). The register bits are ignored during the test and applied again when the coil is cleared. Code: `relayTestService()` in `src/cpu1/functions_io_cpu1.cpp`, called every loop. Events "Relay test started/stopped". Dashboard: the Relays card shows the actual outputs and "(Relay Test Running)".
+- Test tool: `tools/modbus_relay_test.js`.

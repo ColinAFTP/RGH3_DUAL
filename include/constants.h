@@ -9,7 +9,7 @@ constexpr int ADDR_HOME_COUNTS = 102;
 constexpr int ADDR_INPUTS = 103;
 constexpr int ADDR_PATTERN = 104;             // PLC selects the gripper position: 0 = go HOME, 1 to NUM_PATTERNS = gap pattern n (register block n-1 below)
 constexpr int ADDR_SPEED = 105;
-constexpr int ADDR_RELAYS = 106;              // Each of the first 16 bits corresponds to the switching of the 16 relays
+constexpr int ADDR_RELAYS = 106;              // The 16 relays. Bit 0 is relay 1 ... bit 15 is relay 16. Controlled by the PLC only: nothing in the controller writes to the relays (except the relay test)
 constexpr int ADDR_MANUAL_PTR = 107;          // Manual mode: the spreader to move, as its physical number 1 to 10 (5 is the static spreader and is refused)
 constexpr int ADDR_FAULT_SPREADERS = 108;     // Bitmask of the spreaders that failed to home. Bit (n-1) is spreader n (spreader 5 is static so bit 4 is never set). Read only from the PLC. Cleared by a fault reset.
 constexpr int ADDR_FAULT_TYPE = 109;          // Fault type (FAULT_NONE, FAULT_HOMING, FAULT_OVERTRAVEL or FAULT_CPU2). For FAULT_OVERTRAVEL the bit in ADDR_FAULT_SPREADERS is spreader 1 (left) or 10 (right). Read only from the PLC
@@ -74,7 +74,7 @@ constexpr int ADDR_PATTERN_4_9 = 160;
 // Modbus coil address constant
 const int ADDR_HOMING = 101;            // Homing in progress. Written by CPU1 (1 while CPU2 is homing in any stage, including power up and fault reset homing), read by the PLC. Not a request
 const int ADDR_GAP_UPDATE = 102;        // Update all the gap patterns
-const int ADDR_RELAY_TEST = 103;        // Run the relay test routine
+const int ADDR_RELAY_TEST = 103;        // Relay test: while the PLC keeps this on, the relays switch on one at a time, relay 1 to 16, round and round (RELAY_TEST_STEP_MS each). The relay bits are ignored during the test
 const int ADDR_MANUAL = 104;            // Manual mode request from the PLC. Works together with the manual DIP switch (either one is enough, the DIP switch overrides the PLC)
 const int ADDR_MANUAL_OPN = 105;        // Manual mode: move the spreader in ADDR_MANUAL_PTR forward (open) while this coil is on
 const int ADDR_MANUAL_CLS = 106;        // Manual mode: move the spreader in ADDR_MANUAL_PTR backward (close) while this coil is on
@@ -89,6 +89,7 @@ const int ADDR_MOVE_REFUSED = 121;      // The last request (pattern selection) 
 const int ADDR_CPU2_ONLINE = 122;       // CPU2 (the motion controller) is running and reporting to CPU1. If it stops, Fault (ADDR_HOMING_FAULT) turns on with fault type FAULT_CPU2
 
 // General constants
+constexpr uint32_t RELAY_TEST_STEP_MS = 500;      // Relay test: how long each relay stays on
 constexpr bool DEBUG_STEPPER_CALC = false;  // Print stepper target calculations
 constexpr bool DEBUG_PLOT = false;       // Print stepper positions in Serial Plotter format (CPU2)
 constexpr bool DEBUG_GAP_UPDATE = false;    // Print every gap value read from the PLC (CPU1)

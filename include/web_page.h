@@ -41,14 +41,14 @@ tr.act td{background:rgba(26,156,75,.13)}
 <tr><td>Failed Spreaders (Reg 108)</td><td id="mask">-</td></tr></table></section>
 <section class="card"><h2>Spreaders</h2><table id="sp"><tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr></table></section>
 <section class="card"><h2>Inputs (Proxies)</h2><div class="bits" id="in"></div></section>
-<section class="card"><h2>Relays</h2><div class="bits" id="rl"></div></section>
+<section class="card"><h2>Relays <span class="mut" id="rt"></span></h2><div class="bits" id="rl"></div></section>
 <section class="card wide"><h2>Gap Patterns (mm, Spreader 1 to 10 Left to Right)</h2><table id="gp"></table></section>
 <section class="card wide"><h2>Event Log</h2><div id="log"></div></section>
 </main>
 <script>
 const $=id=>document.getElementById(id),SP=[1,2,3,4,6,7,8,9,10],FTYPE=['None','Homing Failed','Over Travel','CPU2 Lost'],REASON=['None','Busy','Fault Active','Positions Unknown','Invalid Pattern','No Gap Data','Bad Targets','Home Failed','Manual Mode'],STATE=['Idle','Moving','Homing: Approach','Homing: Pulses','Fault','Idle, Positions Unknown','Manual'];
 const inLbl=['P1 OT L','P2 S1','P3 S2','P4 S3','P5 S4','P6 S6','P7 S7','P8 S8','P9 S9','P10 S10','P11 OT R','In11','In12','In13','In14','In15'];
-const rlLbl=['R1 Home','R2 Target','R3','R4','R5','R6','R7','R8','R9','R10','R11','R12','R13','R14','R15','R16'];
+const rlLbl=['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10','R11','R12','R13','R14','R15','R16'];
 const chip=(id,on,cls)=>{$(id).className='chip'+(on?' '+(cls||'on'):'')};
 const led=(on,cls)=>'<span class="led'+(on?' '+(cls||'on'):'')+'"></span>';
 function fmt(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+h+'h '+m+'m '+s%60+'s'}
@@ -62,7 +62,7 @@ function render(s){
  $('mask').textContent='0x'+s.mask.toString(16).toUpperCase();
  let h='<tr><th>Spreader</th><th>Home Sensor</th><th>Position mm</th><th>Fault</th></tr>';
  SP.forEach((n,i)=>{h+='<tr><td>S'+n+'</td><td>'+led(s.inputs>>(i+1)&1)+'</td><td>'+(c.ok?(c.pos[i]/10).toFixed(1):'-')+'</td><td>'+led(s.mask>>(n-1)&1,'bad')+'</td></tr>'});
- $('sp').innerHTML=h;bits($('in'),s.inputs,inLbl);bits($('rl'),s.relays,rlLbl);window.act=s.pattern}
+ $('sp').innerHTML=h;bits($('in'),s.inputs,inLbl);bits($('rl'),s.relays,rlLbl);$('rt').textContent=s.rtest?'(Relay Test Running)':'';window.act=s.pattern}
 async function getj(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json()}
 async function tick(){try{render(await getj('/status.json'));$('off').hidden=true}catch(e){$('off').hidden=false}setTimeout(tick,500)}
 async function gaps(){try{const g=await getj('/gaps.json');let h='<tr><th>Pattern</th>';for(let i=0;i<9;i++)h+='<th>Gap '+(i+1)+'</th>';h+='</tr>';
