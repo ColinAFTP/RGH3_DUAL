@@ -1,6 +1,43 @@
 # RGH3_DUAL
 
-Dual Teensy 4.1 controller for a gripper spreader. A PLC commands gap patterns over Modbus TCP; 9 stepper motors position the spreaders. Supersedes `GEMINI.md` (stale) — keep this file current at the end of each session.
+Dual Teensy 4.1 controller for a gripper spreader. A PLC commands gap patterns over Modbus TCP; 9 stepper motors position the spreaders. Keep this file current at the end of each session; the CURRENT STATE block below is the summary, the rest is history and detail.
+
+## CURRENT STATE (updated 2026-09-21, end of the 2-day bench session). READ THIS FIRST.
+
+The sections further down are the chronological history and detail. Where an older section disagrees with this block, THIS BLOCK WINS (older lists are marked [historical]).
+
+**What exists.** Firmware for two Teensy 4.1 boards on one controller PCB, bench-tested on Colin's desk with simulated proximity sensors (switches) and NO motors or gripper attached yet. CPU1 = Modbus TCP server, inputs, relays, web dashboard. CPU2 = 9 steppers (TeensyStep for pattern moves; a direct pulse engine for homing and manual mode). They talk over I2C (CPU2 master, CPU1 slave 0x40) plus four hardwired lines each way. Everything is committed and pushed to https://github.com/ColinAFTP/RGH3_DUAL (branch master).
+
+**Physical layout.** 10 spreaders numbered 1-10 left to right; spreader 5 is static; steppers 1-9 drive spreaders 1-4 and 6-10. Positions are steps from home (0 = closed up against the neighbour on the static spreader's side). Home sensors: proxy 2-10 (input bits 1-9); proxy 1 and 11 (bits 0 and 10) are the over-travel sensors, NOT wired yet, so `OVERTRAVEL_ENABLED` is false. Motors run forward = open, backward = close (wiring swapped physically).
+
+**Modbus map (CPU1, 192.168.2.51-54 from the DIP switches, port 502, ONE client at a time).**
+- Holding registers: 101 ticker (seconds), 102 unused (home counts, not implemented), 103 filtered input word, 104 PLC pattern selection (0 = HOME, 1-5 = patterns), 105 speed, 106 RELAYS (bit 0 = relay 1 ... bit 15 = relay 16, PLC only), 107 manual spreader number (1-10, not 5), 108 failed spreaders bitmask (bit n-1 = spreader n), 109 fault type (0 none, 1 homing failed, 2 over travel, 3 CPU2 lost), 110 last refused reason (1 busy, 2 fault, 3 positions unknown, 4 invalid pattern, 5 no gap data, 6 targets out of range, 7 home failed, 8 manual mode), 111-160 gap patterns (pattern n = block n-1 at 111 + 10 x (n-1), 9 gaps each, whole mm).
+- Coils: 101 = homing in progress (CPU1 writes it, the PLC only reads), 102 gap update (obsolete, cleared), 103 relay test (relays switch on one at a time 1 to 16, round and round, 500 ms each), 104 manual mode request, 105 jog open, 106 jog close, 107 fault reset.
+- Discrete inputs: 117 Home (all 9 sensors on, no fault, CPU2 online), 118 At Target, 119 manual mode active, 120 Fault, 121 Move Refused, 122 CPU2 Online.
+- PLC handshake: write the pattern; At Target drops within ~3 ms and only rises when the request has really been carried out; a refused request leaves At Target off and turns Move Refused on (reason in 110); wait for Home after power-up and after pattern 0; never select the same pattern twice without pattern 0 between (the PLC sequence is home - pattern - home - pattern).
+- Hardwired: A1 start-move pulse (CPU1 to CPU2, 500 ms), A2 manual DIP level, A3 fault reset pulse, A4 over-travel level; B2 at target, B3 fault, B4 refused (CPU2 to CPU1).
+
+**Behaviour.** Pattern 0 = home: TeensyStep to `HOME_APPROACH_MM` (5 mm), then the direct pulse cascade closes the last stretch until each spreader's own sensor is on (stops instantly; ramp up only; step-count and time limits raise a homing fault). Auto-home at power-up if any of proxy 2-10 is off (desired by Colin). Fault reset (coil 107) starts a search home. Manual mode (DIP 3 or coil 104): one spreader at a time, hold-to-move; OPENING pushes the touching spreaders further out; CLOSING pushes the touching spreaders further in, up to the static spreader; dead man 1 s; the DIP switch overrides the PLC and stops a running move; leaving manual mode ALWAYS starts an automatic home; pattern requests are refused meanwhile. Both CPUs run a 2 s hardware watchdog. Inputs are glitch-filtered (3 samples). The web dashboard (http://192.168.2.51/, read only) shows status, spreaders, inputs, relays, gap patterns and the event log; manual mode is an ORANGE chip on the Status card.
+
+**DIP switches (labels on the PCB).** DIP 1 = IP address bit 0, DIP 2 = IP address bit 1 (number = DIP 2 x 2 + DIP 1: none = .51, DIP 1 = .52, DIP 2 = .53, both = .54; read at power up), DIP 3 = manual mode (ON = pin HIGH). All verified.
+
+**Code map.** `include/` headers (`constants.h` holds every address, pin and tuning constant, documented). `src/shared/` (variables, watchdog). `src/cpu1/` (main, comms/Modbus, io, i2c slave, web server, manual, variables). `src/cpu2/` (main, steppers, homing, manual, pulses, status, i2c master, io). `tools/` = Node.js bench scripts (no libraries): `modbus_home_test.js`, `modbus_refuse_test.js`, `modbus_manual_test.js`, `modbus_close_test.js`, `modbus_close_chain_test.js`, `modbus_relay_test.js`, `modbus_stale_test.js`, `modbus_monitor.js`.
+
+**Working rules learned the hard way.**
+1. Flashing: `~/.platformio/penv/Scripts/pio.exe run -e cpu1|cpu2 -t upload` (pio is not on PATH; there is no Python). UNPLUG THE OTHER BOARD'S USB, press the Teensy program button when the upload starts, then confirm the firmware from the serial banner ("CPU 1 online" / "CPU 2 online") or the dashboard. Both boards are powered externally. COM9 = CPU1, COM10 = CPU2. Kill leftover `pio`/SCons python processes before flashing. Whenever the I2C messages change, flash BOTH boards.
+2. Only ONE Modbus client at a time. Colin's Modbus Simulator (`MDBUS.exe`, runs in the VM, reconnects by itself) must be DISCONNECTED before running the tools; Colin left it connected on 2026-09-20 and it looked like a mystery client (fixed/explained, see the history). Check with `Get-NetTCPConnection -RemotePort 502`. CPU1 logs the address of every Modbus client (192.168.2.7 = the host, which the VM's traffic goes through).
+3. Interactive bench scripts must wait patiently (minutes) for Colin's manual action, and keep sending Modbus requests while waiting.
+4. Keep the test switches in `constants.h` OFF: `DEBUG_HANG_TEST_CPU1_S`, `DEBUG_HANG_TEST_CPU2_S`, `DEBUG_STALL_TEST`.
+5. Colin's working style: brief answers, ask before large features, agreed decisions are recorded here, commits at the end of a piece of work, push when he asks.
+
+**Bench-tested and working:** pattern moves (4/5 layout), home and search home, fault types and reset, refused requests, CPU2-lost supervision, watchdog (CPU2 hang test), pulse stale-data stop, over-travel logic (built, disabled), input filter, Modbus takeover of a vanished client, manual mode (jog, push-along both ways and both sides, dead man, DIP override, power-up in manual, auto home on exit, coil 101), relays under PLC control and the relay test (Colin confirmed all 16 relays click in order), DIP IP addresses, web dashboard.
+**NOT tested:** any real motor, gripper, driver or proximity sensor; over-travel sensors (not wired); manual mode during a fault or with the over-travel sensors; push-along with real moving sensors; CPU1's own watchdog reset; a watchdog reset in the middle of a real move.
+
+**OPEN ITEMS (current list).**
+A. Before the first run on a real gripper: (1) verify motor direction (positive = open, homing = close) and steps per mm by measuring, first at low speed with a hand on the E-stop; (2) wire proxy 1 and 11, set `OVERTRAVEL_ENABLED = true` and bench-test it, including the manual-mode block; (3) check the PST8072 step/dir inputs for defined levels during a CPU reset or flash (pull-downs) and consider driving ENA from CPU2 as a hardware stop (firmware over-travel is not a safety function); (4) get the PST8072 timing (min pulse width, direction setup/hold, active edge, 3.3 V levels; supplier note drafted) and check our 8 us / 20 us pulses; (5) tune `HOME_*`, `MANUAL_*`, `INIT_ACCEL`, `MAX_SPEED`, `INPUT_FILTER_SAMPLES` on the real gripper (`HOME_APPROACH_MM = 0` falls back to TeensyStep-only homing if hybrid homing is too slow).
+B. Code still to write: stuck-on proximity sensor detection (optional plausibility check); holding register 102 (home counts) and the input registers 101-110 are unused.
+C. To investigate: I2C reliability at 1 MHz (external pull-ups on pins 24/25? measured about 1 failed sensor read in 10,000); glitches still appear on wired inputs (P2, P3) every few minutes and are filtered out (check wiring and shielding on the real gripper); CPU1 watchdog reset never provoked; the post-manual "Move Refused (8)" stays on until the next valid pattern change (cosmetic).
+D. Documents/housekeeping: write the PLC-side interface document (the handshake, fault types, refused reasons, manual mode, relays, coil 101, one Modbus client, other masters must be disconnected); there are no automated tests.
 
 ## Build
 
@@ -18,7 +55,7 @@ Dual Teensy 4.1 controller for a gripper spreader. A PLC commands gap patterns o
 - Hardwired lines: CPU1 `OUTPUT_A1` -> CPU2 `INPUT_A1` (500 ms pulse = "start move"); CPU2 `OUTPUT_B1/B2` -> CPU1 `INPUT_B1/B2` (at home / at target), which CPU1 mirrors to Modbus discrete inputs 117/118 and relay bits 0–1.
 - Modbus map (all in `include/constants.h`): holding 101–160 (101–107 control/status, pattern p gaps at `111 + p*STRIDE_GAPS`); coils 101–120; discrete inputs 101–120.
 
-## Domain facts (from Colin)
+## Domain facts (from Colin) [historical: layout and homing details were corrected later, see CURRENT STATE and the SPEC section]
 
 - (OUTDATED, see SPEC section: layout is 4 left + static + 5 right) The gripper has 10 spreaders. The 5th is **static** — a fixed reference all others close against when homing. 9 movable spreaders (9 steppers), asymmetric: 5 on one side of the static one (`i = 0..4`), 4 on the other (`5..8`).
 - (OUTDATED, see SPEC section) `gapArrays[p][i]`: gap[4] = last left mover to the static spreader, gap[5] = static spreader to first right mover. Target for stepper i = cumulative gap distance from the static spreader (absolute steps from home). The maths in `stepTargetCalc` is correct; the asymmetry is real, not a bug.
@@ -35,7 +72,7 @@ Dual Teensy 4.1 controller for a gripper spreader. A PLC commands gap patterns o
 - Never print from ISRs.
 - Colin is an experienced controls person; keep explanations concise and flag physical-safety implications.
 
-## Known issues / roadmap (as of 2026-09-19 review)
+## Known issues / roadmap (as of 2026-09-19 review) [historical: almost all done, see CURRENT STATE]
 
 Status key: [ ] open, [x] done. Update as work lands.
 
@@ -63,7 +100,7 @@ Housekeeping
 - [ ] Gap resolution is whole mm (16-bit registers); decide whether 0.1 mm scaling is needed.
 - [x] Fix comment in `stepTargetCalc` right side ("gap[mid..i]" should read "gap[mid+1..i]").
 
-## Session log
+## Session log [historical]
 
 - 2026-09-19: Review, checkpoint commit 12cc709, then correctness/robustness fixes (commit d74b415): stale-data fix (CPU1 refreshes on pattern change, CPU2 re-reads on trigger), target validation, non-blocking moves, at-home/at-target signals, staged gap copy, timed serial wait, debug flags. Builds clean; NOT yet bench-tested. Next: bench test on desk board, then homing (proximity sensors via I2C cmd 1 `readIO`), then manual mode (DIP switch), then housekeeping.
 
@@ -103,7 +140,7 @@ This section supersedes any contradicting text above (notably "home is not patte
 
 **Hardware**: driver PST8072, motor PHG57S56-430-PR20-40HC (NEMA23, 1.8 deg, 3 A, 20:1 gearbox). 8000 steps/rev at the pinion (half-step driver setting). Look up PST8072 min pulse width / direction setup time when finalising pulse timing.
 
-## Session log (continued)
+## Session log (continued) [historical]
 
 - 2026-09-19 (later): implemented the SPEC above. New: `src/cpu2/functions_homing.cpp` + `include/functions_homing.h` (direct-pulse cascade, fault handling), 4/5 layout in `stepTargetCalc`, pattern 0 = home and value n -> block n-1, CPU1 computes Home from proximity bits, 1 ms input sampling, coil 107 fault reset -> A3 pulse, holding 108 fault mask via I2C command 4, I2C slave now starts last in CPU1 `setup()`, `readIO` returns a uint16. Both envs build. NOT flashed or bench tested yet.
 - Bench test plan for the new firmware: (1) power up with proxies 2-10 simulated on: expect "gripper is home", Home (117) high. (2) Power up with a proxy off: expect search-home pulses, then fault after HOME_MAX_STEPS pulses / timeout since nothing closes the sensor on the desk; check DI 120, register 108, then coil 107 reset. (3) Patterns 1-5 then 0. Watch pin 13 (stepper 1 pulse) LED. Bench numbers change with the new layout: 30 mm gaps now give spreader 1 = 120 mm and spreader 10 = 150 mm.
@@ -170,7 +207,7 @@ Belts-and-braces: the controller already refuses targets beyond the rack travel.
 - Not a safety-rated function. If over travel protects people or the mechanics, also wire it to the PST8072 ENA inputs / motor supply so it works with the firmware down.
 - NOT yet bench tested. To test: wire switches to inputs 1 and 11 (default off), set `OVERTRAVEL_ENABLED` true, flash both CPUs, start a long slow move (for example pattern 1 with 20 mm gaps at speed 1500) and flip a switch mid-move: expect the motion to stop within ~5 ms, Fault (120) on, register 108 = 0x001 (left) or 0x200 (right), register 109 = 2, log "OVER TRAVEL FAULT". Then reset with coil 107 (switch off first, or the fault returns).
 
-## Pre-real-gripper review (end of session 2026-09-19): gaps found, not yet fixed
+## Pre-real-gripper review (end of session 2026-09-19) [historical: items 1-3, 5, 9, 10 and more are done, see CURRENT STATE]
 
 Everything below was found by reviewing the whole code base; none of it is fixed yet unless marked. Order = suggested priority.
 
@@ -221,7 +258,7 @@ Fix (`ethernetConnect()` in src/cpu1/functions_comms.cpp, called every loop pass
 Bench results: silent client replaced (served on the first attempt), active client (20 ms polling) untouched while a second client was refused, real cable pull (silent client + 10 s unplug) then a new client served on the first attempt. Worst CPU1 loop pass ~80 us. Tools: `tools/modbus_stale_test.js hold|probe`.
 Note for the PLC programmer: if the PLC connects while another Modbus master (for example a Modbus simulator) is actively polling, the PLC is refused. Disconnect other masters first.
 
-## OPEN ITEMS (consolidated 2026-09-20, supersedes the older lists above for what is still to do)
+## OPEN ITEMS (consolidated 2026-09-20) [superseded by the list in CURRENT STATE]
 
 **A. Before the first run on a real gripper (hardware and procedure)**
 1. Verify motor direction and scaling: TeensyStep positive = OPEN and homing (dir pin LOW) = CLOSE are assumed; `STEPS_PER_MM` is computed, not measured. Motors off the mechanics first if possible, low speed, hand on the E-stop.
@@ -315,3 +352,7 @@ Lesson: any object that holds a socket number must be released (`stop()` and res
 The repeating "Modbus client connected / disconnected" traffic was partly a REAL second client: `MDBUS.exe` ("Mdbus Main-On"), the Modbus Simulator at `\vmware-host\Shared Folders\RoboBrick\Teensy\Modbus Simulator\MDBUS.exe`, running INSIDE THE VM (the machine VS Code runs on, 192.168.2.10), started 2026-09-19 10:29 and left running. Its traffic leaves through the host, so CPU1 logs it as 192.168.2.7 (the host). It reconnects by itself whenever the single Modbus slot is free, so it took the slot whenever a test script was not connected. Found by sampling `Get-NetTCPConnection -RemotePort 502` in the VM while CPU1 logged a refused connection.
 How to check what is connected to the controller from the VM: `Get-NetTCPConnection -RemotePort 502 | Select LocalPort,OwningProcess` and `Get-Process -Id <pid>`.
 Rule of thumb: an address of 192.168.2.7 in the CPU1 log means "the host or anything in the VM going through the host"; check the VM's processes before suspecting another device. The socket aliasing bug (previous section) was a separate real bug.
+- Confirmed by Colin on 2026-09-21: he had tested the board with the MDBUS simulator after the 2026-09-20 session and left it connected; it is disconnected now. He also confirmed that all 16 relays click in order during the relay test (coil 103).
+
+## Firmware currently on the boards (end of session 2026-09-21)
+Both boards run the code of the last commit of this session (CPU1: relay change, socket fix, longer log lines, client address logging; CPU2: clamp fix, closing chain, manual mode). Test flags OFF. Nothing is uncommitted.
